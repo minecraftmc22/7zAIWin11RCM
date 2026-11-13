@@ -128,7 +128,7 @@
                                         x:Name="ModernMenuHint"
                                         MaxWidth="620"
                                         Style="{StaticResource DescriptionTextBlockStyle}"
-                                        Text="在 Windows 11 紧凑菜单中直接显示 7-Zip 条目。需要一次性安装扩展包，过程中会请求管理员权限。" />
+                                        Text="在 Windows 11 紧凑菜单里提供「7-Zip」子菜单，条目与 7-Zip 原生菜单一致（解压、添加到压缩包、测试、CRC 校验等）。需要一次性安装扩展包，过程中会请求管理员权限。" />
                                 </StackPanel>
                             </CheckBox>
 

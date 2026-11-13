@@ -56,39 +56,29 @@
           Square44x44Logo="packaging\Assets\Square44Logo.png" />
 
       <Extensions>
-        <!-- 进程内 COM 服务器：三个 IExplorerCommand 实现 -->
+        <!-- 进程内 COM 服务器：新版菜单的根命令（子项由 EnumSubCommands 动态返回） -->
         <com:Extension Category="windows.comServer">
           <com:ComServer>
             <com:SurrogateServer DisplayName="7zAIWin11RCM Shell Extension">
               <com:Class
-                  Id="6F3A1B20-7C4D-4E71-9A55-0D1B2C3E4F01"
-                  Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
-                  ThreadingModel="Both" />
-              <com:Class
-                  Id="6F3A1B21-7C4D-4E71-9A55-0D1B2C3E4F02"
-                  Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
-                  ThreadingModel="Both" />
-              <com:Class
-                  Id="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03"
+                  Id="6F3A1B30-7C4D-4E71-9A55-0D1B2C3E4F10"
                   Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
                   ThreadingModel="Both" />
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>
 
-        <!-- 新版右键菜单入口 -->
+        <!-- 新版右键菜单入口：一个「7-Zip」子菜单，内容与 7-Zip 原生菜单一致 -->
         <desktop4:Extension Category="windows.fileExplorerContextMenus">
           <desktop4:FileExplorerContextMenus>
             <desktop5:ItemType Type="*">
-              <desktop5:Verb Id="ExtractHere" Clsid="6F3A1B20-7C4D-4E71-9A55-0D1B2C3E4F01" />
-              <desktop5:Verb Id="ExtractTo" Clsid="6F3A1B21-7C4D-4E71-9A55-0D1B2C3E4F02" />
-              <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
+              <desktop5:Verb Id="SevenZipMenu" Clsid="6F3A1B30-7C4D-4E71-9A55-0D1B2C3E4F10" />
             </desktop5:ItemType>
             <desktop5:ItemType Type="Directory">
-              <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
+              <desktop5:Verb Id="SevenZipMenu" Clsid="6F3A1B30-7C4D-4E71-9A55-0D1B2C3E4F10" />
             </desktop5:ItemType>
             <desktop5:ItemType Type="Directory\Background">
-              <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
+              <desktop5:Verb Id="SevenZipMenu" Clsid="6F3A1B30-7C4D-4E71-9A55-0D1B2C3E4F10" />
             </desktop5:ItemType>
           </desktop4:FileExplorerContextMenus>
         </desktop4:Extension>

@@ -109,8 +109,8 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 | | 旧版（经典）菜单 | 新版（紧凑）菜单 |
 | --- | --- | --- |
 | 出现位置 | `显示更多选项` / `Shift + 右键` | 一级右键菜单 |
-| 实现方式 | 自带壳扩展（转调 7-Zip 自己的菜单） | 稀疏 MSIX 包 + `IExplorerCommand` COM 扩展 |
-| 菜单内容 | 与 7-Zip 原生菜单完全一致 | 精简的常用命令 |
+| 实现方式 | 自带壳扩展（转调 7-Zip 自己的菜单） | 稀疏 MSIX 包 + `IExplorerCommand`（`EnumSubCommands` 级联） |
+| 菜单内容 | 与 7-Zip 原生菜单完全一致 | 与 7-Zip 原生菜单完全一致 |
 | 需要管理员 | 否 | 是（安装证书 + 注册应用包） |
 | 需要额外组件 | 无 | Windows SDK 的 `MakeAppx.exe` / `signtool.exe` |
 | 生效时间 | 立即 | 需重启「Windows 资源管理器」 |
@@ -140,14 +140,24 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 ```
 7zAIWin11RCM.exe            WinUI 3 主程序（设置界面 / 旧版菜单注册 / 调用安装脚本）
  └─ shell\
-     SevenZipAIWin11RCM.ShellExt.comhost.dll   .NET COM 宿主，内含 3 个 IExplorerCommand 实现
-     SevenZipAIWin11RCM.ShellExt.dll
+     SevenZipAIWin11RCM.ShellExt.comhost.dll   .NET COM 宿主
+     SevenZipAIWin11RCM.ShellExt.dll           菜单实现（旧版 IContextMenu + 新版 IExplorerCommand）
  └─ packaging\
      AppxManifest.xml       稀疏包清单（uap10:AllowExternalContent + ComServer + FileExplorerContextMenus）
      Assets\*.png
  └─ scripts\
      install-modern-menu.ps1 / uninstall-modern-menu.ps1
 ```
+
+新版菜单只有一个「7-Zip」入口（一个 CLSID），子项通过 `IExplorerCommand::EnumSubCommands` 动态返回，所以不需要给每一条命令单独注册 COM 类。
+
+子项从哪来？紧凑菜单不允许跨包调用 7-Zip 的现代扩展，但扩展自己可以像旧版那样**建一个隐藏菜单**，让 `7-zip.dll` 把条目填进去，再逐项读出文本和命令 id；用户点某一条时，重建同样的菜单并按 id 转交给 7-Zip 执行。因此标题（`解压到 "文件夹名\"`）、顺序、子菜单（`CRC SHA`、`打开压缩包`）都与原生一致。
+
+几个实现要点：
+
+- `EnumSubCommands` 拿不到 `IShellItemArray`，所以选中项在 `GetTitle` / `GetState` 阶段缓存；没有可用条目时 `GetState` 返回 `ECS_HIDDEN`，不会留下一个空菜单。
+- 取 `IDataObject` 必须用父文件夹的 `IShellFolder::GetUIObjectOf` + **子 PIDL**；`SHCreateDataObject` 传绝对 PIDL 会返回 `E_INVALIDARG`。
+- 执行时构造 `CMINVOKECOMMANDINFO`（x64 下 56 字节），`lpVerb` 直接放命令 id（MAKEINTRESOURCE）。
 
 勾选「新版右键菜单」并保存时，主程序以管理员权限调用 `install-modern-menu.ps1`：
 
@@ -186,7 +196,7 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 │  │     └─ SettingsStore.cs     %LOCALAPPDATA% 下的设置与日志
 │  └─ SevenZipAIWin11RCM.ShellExt COM 宿主扩展
 │     ├─ SevenZipCascadeMenu.cs  旧版菜单处理器（转调 7-Zip 自己的菜单）
-│     └─ ExplorerCommands.cs     新版菜单命令（IExplorerCommand × 3）
+│     └─ ExplorerCommands.cs     新版菜单：借用 7-Zip 菜单 + EnumSubCommands 级联
 ├─ packaging                    稀疏 MSIX 清单与图标
 ├─ scripts                      新版菜单安装 / 卸载脚本
 ├─ tools\make_assets.py         生成图标与 Logo（纯 Python）
@@ -221,6 +231,9 @@ git push origin v1.2.0
 tag 去掉前缀 `v` 后就是版本号，会写入 exe 的文件版本、关于页显示的版本以及 Release 标题。本地等价命令：`.\build.ps1 -AppVersion 1.2.0`。
 
 ## 常见问题
+
+**更新程序时提示「文件被占用 / 无法覆盖」？**
+旧版菜单的壳扩展（`shell\SevenZipAIWin11RCM.ShellExt.comhost.dll`）会被资源管理器加载并锁定。覆盖前先取消勾选「旧版右键菜单」并保存，然后重启「Windows 资源管理器」，再解压新版本覆盖。
 
 **旧版菜单里 7-Zip 是空的 / 只显示几个条目？**
 v1.1.0 起旧版菜单改为壳扩展转调 7-Zip 原生菜单，条目与 7-Zip 保持一致。从旧版升级后请**取消勾选保存一次、再勾选保存一次**（或跑 `--legacy-menu off` 再 `--legacy-menu on`），把旧的注册表动词清掉。

@@ -14,9 +14,12 @@ internal static class ShellInterop
 
     // EXPCMDSTATE
     public const int EcsEnabled = 0x00000000;
+    public const int EcsDisabled = 0x00000001;
+    public const int EcsHidden = 0x00000002;
 
     // EXPCMDFLAGS
     public const int EcfDefault = 0x00000000;
+    public const int EcfHasSubCommands = 0x00000001;
 }
 
 /// <summary>
@@ -51,6 +54,25 @@ public interface IExplorerCommand
 
     [PreserveSig]
     int EnumSubCommands(out IntPtr ppEnum);
+}
+
+/// <summary>枚举子命令（Windows 11 新版菜单的级联子菜单靠它）。</summary>
+[ComImport]
+[Guid("A88826F8-186F-4987-AADE-EA0CEF8FBFE8")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IEnumExplorerCommand
+{
+    [PreserveSig]
+    int Next(uint celt, out IExplorerCommand pUICommand, out uint pCeltFetched);
+
+    [PreserveSig]
+    int Skip(uint celt);
+
+    [PreserveSig]
+    int Reset();
+
+    [PreserveSig]
+    int Clone(out IntPtr ppenum);
 }
 
 [ComImport]
