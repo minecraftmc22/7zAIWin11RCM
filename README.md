@@ -229,6 +229,6 @@ Remove-Item -Recurse "$env:LOCALAPPDATA\7zAIWin11RCM"
 
 ## 许可
 
-[MIT License](LICENSE) © 2026 Minecraftmc22
+[GNU AGPL-3.0](LICENSE) © 2026 Minecraftmc22
 
 本项目与 7-Zip 官方无关，仅调用其 `7zG.exe` / `7zFM.exe` 命令行与图形界面组件。7-Zip 版权归 Igor Pavlov 所有。
