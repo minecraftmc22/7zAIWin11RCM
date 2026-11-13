@@ -63,6 +63,66 @@ function Find-SdkTool {
     return $null
 }
 
+# 运行外部工具并合并 stdout / stderr。
+# 注意：Windows PowerShell 5.1 里原生命令的错误走 stderr，直接管到 ForEach-Object 会丢掉；
+# 而 $ErrorActionPreference='Stop' 时 2>&1 产生 ErrorRecord 又会抛异常，所以这里临时放宽。
+function Invoke-Tool {
+    param(
+        [Parameter(Mandatory = $true)][string]$Exe,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $raw = & $Exe @Arguments 2>&1
+        $code = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previous
+    }
+
+    $text = (@($raw) | ForEach-Object { ([string]$_).TrimEnd() }) -join "`r`n"
+    return [pscustomobject]@{ ExitCode = $code; Text = $text }
+}
+
+# 新建代码签名证书。
+# 两点必须满足，否则签名一定失败：
+#   1. 主题必须与 AppxManifest.xml 的 Publisher 完全一致（这里都是 CN=7zAIWin11RCM），
+#      不一致时 signtool 只报 "SignerSign() failed"（0x8007000B），很难看懂；
+#   2. 必须带代码签名 EKU（1.3.6.1.5.5.7.3.3）。
+function New-SigningCertificate {
+    return New-SelfSignedCertificate `
+        -Type Custom `
+        -Subject $CertificateSubject `
+        -KeyUsage DigitalSignature `
+        -KeyExportPolicy Exportable `
+        -FriendlyName '7zAIWin11RCM 右键菜单扩展' `
+        -CertStoreLocation 'Cert:\LocalMachine\My' `
+        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') `
+        -NotAfter (Get-Date).AddYears(10)
+}
+
+# 自签名证书必须被本机信任，否则 Add-AppxPackage 报 0x800B0109。
+# 「受信任人」对侧载 MSIX 有效，「受信任的根证书颁发机构」是微软文档里的做法，两个都确保一遍。
+function Register-CertificateTrust {
+    param([Parameter(Mandatory = $true)]$Certificate)
+
+    $cer = Join-Path $WorkRoot '7zAIWin11RCM.cer'
+    Export-Certificate -Cert $Certificate -FilePath $cer -Force | Out-Null
+
+    foreach ($store in @('TrustedPeople', 'Root')) {
+        $exists = Get-ChildItem "Cert:\LocalMachine\$store" |
+            Where-Object { $_.Thumbprint -eq $Certificate.Thumbprint } |
+            Select-Object -First 1
+
+        if (-not $exists) {
+            Write-Log "把证书加入「$store」存储…"
+            Import-Certificate -FilePath $cer -CertStoreLocation "Cert:\LocalMachine\$store" | Out-Null
+        }
+    }
+}
+
 try {
     Write-Log '=== 安装 Windows 11 新版右键菜单扩展 ==='
 
@@ -120,9 +180,10 @@ try {
     Write-Log '正在打包稀疏 MSIX…'
     # /nv：稀疏包引用的 exe / DLL 都在外部安装目录里，不在包内，
     #     必须跳过"清单里引用的文件是否存在于包内"的校验。
-    & $makeAppx pack /o /nv /d $stage /p $msix | ForEach-Object { Write-Log $_ }
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $msix)) {
-        Write-Log "错误：MakeAppx 打包失败（退出码 $LASTEXITCODE）。"
+    $packResult = Invoke-Tool -Exe $makeAppx -Arguments @('pack', '/o', '/nv', '/d', $stage, '/p', $msix)
+    if ($packResult.Text) { Write-Log $packResult.Text }
+    if ($packResult.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $msix)) {
+        Write-Log "错误：MakeAppx 打包失败（退出码 $($packResult.ExitCode)）。"
         exit 3
     }
 
@@ -133,40 +194,103 @@ try {
 
     if (-not $certificate) {
         Write-Log '创建自签名代码签名证书…'
-        $certificate = New-SelfSignedCertificate `
-            -Type Custom `
-            -Subject $CertificateSubject `
-            -KeyUsage DigitalSignature `
-            -FriendlyName '7zAIWin11RCM 右键菜单扩展' `
-            -CertStoreLocation 'Cert:\LocalMachine\My' `
-            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') `
-            -NotAfter (Get-Date).AddYears(10)
+        $certificate = New-SigningCertificate
     }
 
-    $trusted = Get-ChildItem Cert:\LocalMachine\TrustedPeople |
-        Where-Object { $_.Thumbprint -eq $certificate.Thumbprint } |
-        Select-Object -First 1
-
-    if (-not $trusted) {
-        Write-Log '把证书加入「受信任人」存储…'
-        $cerPath = Join-Path $WorkRoot '7zAIWin11RCM.cer'
-        Export-Certificate -Cert $certificate -FilePath $cerPath -Force | Out-Null
-        Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
-    }
+    Write-Log "签名证书指纹：$($certificate.Thumbprint)"
+    Register-CertificateTrust -Certificate $certificate
 
     Write-Log '正在签名…'
     # 不做时间戳：/td 必须与 /tr 成对出现，而时间戳服务器在离线环境下可能连不上。
-    # 本地自签名 + 受信任人存储的包不需要时间戳。
-    & $signtool sign /fd SHA256 /sha1 $certificate.Thumbprint $msix |
-        ForEach-Object { Write-Log $_ }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "错误：签名失败（退出码 $LASTEXITCODE）。"
+    # 本地自签名 + 已加入受信任存储的包不需要时间戳。
+    #
+    # 必须带 /sm：证书建在 LocalMachine\My，而 signtool 默认只查 CurrentUser\My，
+    # 不加 /sm 会直接报 "No certificates were found that met all the given criteria"。
+    $signResult = Invoke-Tool -Exe $signtool -Arguments @(
+        'sign', '/fd', 'SHA256', '/sm', '/sha1', $certificate.Thumbprint, $msix)
+    if ($signResult.Text) { Write-Log $signResult.Text }
+
+    # 兜底 1：某些环境里 signtool 无法直接使用证书存储中的私钥，改用 PFX 文件签名
+    if ($signResult.ExitCode -ne 0) {
+        Write-Log "证书存储签名失败（退出码 $($signResult.ExitCode)），改用 PFX 文件重试…"
+        $pfxPath = Join-Path $WorkRoot 'sign.pfx'
+        $pfxPassword = [guid]::NewGuid().ToString('N')
+        try {
+            $secure = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
+            Export-PfxCertificate -Cert $certificate -FilePath $pfxPath `
+                -Password $secure -Force | Out-Null
+
+            $signResult = Invoke-Tool -Exe $signtool -Arguments @(
+                'sign', '/fd', 'SHA256', '/f', $pfxPath, '/p', $pfxPassword, $msix)
+            if ($signResult.Text) { Write-Log $signResult.Text }
+        }
+        catch {
+            Write-Log "导出 PFX 失败：$($_.Exception.Message)"
+        }
+        finally {
+            if (Test-Path -LiteralPath $pfxPath) { Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    # 兜底 2：证书本身有问题（早期版本生成的证书私钥不可导出），删掉重建再签一次
+    if ($signResult.ExitCode -ne 0) {
+        Write-Log '现有证书无法用于签名，删除后重建…'
+        try {
+            Get-ChildItem Cert:\LocalMachine\My |
+                Where-Object { $_.Subject -eq $CertificateSubject } |
+                ForEach-Object { Remove-Item -Path $_.PSPath -Force }
+
+            $certificate = New-SigningCertificate
+            Write-Log "新证书指纹：$($certificate.Thumbprint)"
+            Register-CertificateTrust -Certificate $certificate
+
+            $signResult = Invoke-Tool -Exe $signtool -Arguments @(
+                'sign', '/fd', 'SHA256', '/sm', '/sha1', $certificate.Thumbprint, $msix)
+            if ($signResult.Text) { Write-Log $signResult.Text }
+        }
+        catch {
+            Write-Log "重建证书失败：$($_.Exception.Message)"
+        }
+    }
+
+    if ($signResult.ExitCode -ne 0) {
+        Write-Log "错误：签名失败（退出码 $($signResult.ExitCode)）。"
+        Write-Log '提示：管理员 PowerShell 执行 certutil -store My 7zAIWin11RCM 可查看证书状态。'
         exit 3
+    }
+
+    # 签名结果自检（失败只告警，不阻断：自签名证书的信任链判定较严格）
+    $verifyResult = Invoke-Tool -Exe $signtool -Arguments @('verify', '/pa', $msix)
+    if ($verifyResult.ExitCode -eq 0) {
+        Write-Log '签名校验：通过'
+    }
+    else {
+        Write-Log "签名校验未通过（退出码 $($verifyResult.ExitCode)），继续尝试注册："
+        if ($verifyResult.Text) { Write-Log $verifyResult.Text }
     }
 
     # 3) 注册稀疏包，外部内容指向应用安装目录
     Write-Log "注册扩展包（ExternalLocation=$ExternalPath）…"
-    Add-AppxPackage -Path $msix -ExternalLocation $ExternalPath -ErrorAction Stop
+    try {
+        Add-AppxPackage -Path $msix -ExternalLocation $ExternalPath -ErrorAction Stop
+    }
+    catch {
+        $message = $_.Exception.Message
+        Write-Log "注册失败：$message"
+
+        # 0x800B0109 = CERT_E_UNTRUSTEDROOT：自签名证书的根不在受信任根存储里。
+        # 追加到「受信任的根证书颁发机构」后重试一次（仅本机，随时可删）。
+        if ($message -match '800B0109' -or $message -match '0x800B0109') {
+            Write-Log '证书根不受信任，把自签名证书加入「受信任的根证书颁发机构」后重试…'
+            $cerPath = Join-Path $WorkRoot '7zAIWin11RCM.cer'
+            Export-Certificate -Cert $certificate -FilePath $cerPath -Force | Out-Null
+            Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
+            Add-AppxPackage -Path $msix -ExternalLocation $ExternalPath -ErrorAction Stop
+        }
+        else {
+            throw
+        }
+    }
 
     $installed = Get-AppxPackage -Name $PackageName -ErrorAction Stop
     if (-not $installed) {

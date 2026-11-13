@@ -325,6 +325,10 @@ public static class ModernMenuService
         {
             1223 => "已取消管理员授权，新版菜单未安装。",
             2 => "系统缺少打包工具（MakeAppx / SignTool），请安装 Windows SDK 后重试。",
+            3 => string.IsNullOrWhiteSpace(tail)
+                ? "打包或签名失败，请查看详细信息。"
+                : $"打包或签名失败：{tail}",
+            4 => "安装所需的文件缺失（清单或扩展 DLL），请重新解压程序后重试。",
             5 => "没有管理员权限，新版菜单未安装。请改用旧版菜单，或用管理员账户运行本程序。",
             6 => "注册扩展包失败，请查看详细信息。",
             1 => string.IsNullOrWhiteSpace(tail)

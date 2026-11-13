@@ -228,6 +228,18 @@ Get-AppxPackage -Name 7zAIWin11RCM.ShellExt
 **提示安装失败 / 需要 Windows SDK？**
 安装 [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk/)（含 MakeAppx 与 SignTool），或只使用旧版菜单。
 
+**提示「打包或签名失败」？**
+v1.0.4 起日志会带上 MakeAppx / signtool 的原始输出。常见两类：
+
+- `No certificates were found that met all the given criteria` —— 证书建在 `LocalMachine\My`，signtool 必须带 `/sm` 才会去机器存储里找（旧版本漏了这个参数）。
+- `SignerSign() failed` / `0x8007000B` —— 证书主题与清单 `Publisher` 不一致。两者都必须是 `CN=7zAIWin11RCM`，改成别的名字就会失败。
+
+新版菜单的签名用本机自签名证书，程序会自动把它导入「受信任人」与「受信任的根证书颁发机构」两个存储。想手动查看证书状态：
+
+```powershell
+certutil -store My 7zAIWin11RCM
+```
+
 **不要用「以管理员身份运行」启动本程序**
 菜单和扩展都是按账户注册的（旧版写 `HKCU`，新版是 MSIX）。以管理员身份运行时，注册会落到管理员账户上，你自己的日常账户反而看不到菜单。正确做法是普通双击启动，等保存时由程序自己弹出授权提示。
 
