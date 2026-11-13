@@ -125,6 +125,7 @@
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="添加至 Windows 11 新版右键菜单" />
                                     <TextBlock
+                                        x:Name="ModernMenuHint"
                                         MaxWidth="620"
                                         Style="{StaticResource DescriptionTextBlockStyle}"
                                         Text="在 Windows 11 紧凑菜单中直接显示 7-Zip 条目。需要一次性安装扩展包，过程中会请求管理员权限。" />

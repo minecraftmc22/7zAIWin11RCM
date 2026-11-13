@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Security.Principal;
 
 namespace SevenZipAIWin11RCM.Services;
 
@@ -21,6 +22,75 @@ public static class ModernMenuService
     public const string ShellExtensionFileName = "SevenZipAIWin11RCM.ShellExt.comhost.dll";
 
     public static bool IsSupported => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000);
+
+    /// <summary>当前进程是否已提权。</summary>
+    public static bool IsProcessElevated => GetIsElevated();
+
+    /// <summary>当前账户是否属于管理员组（可以弹出 UAC 提权）。</summary>
+    public static bool IsUserAdministrator
+    {
+        get
+        {
+            try
+            {
+                using var identity = WindowsIdentity.GetCurrent();
+                var adminSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+                return identity.Groups?.Contains(adminSid) == true;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>系统里是否有 MakeAppx.exe 与 signtool.exe（Windows SDK 自带）。</summary>
+    public static bool HasPackagingTools =>
+        FindSdkTool("makeappx.exe") is not null && FindSdkTool("signtool.exe") is not null;
+
+    /// <summary>在 Windows SDK 目录里找打包工具；找不到返回 null。</summary>
+    public static string? FindSdkTool(string fileName)
+    {
+        var kits = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Windows Kits", "10", "bin"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Kits", "10", "bin"),
+        };
+
+        foreach (var bin in kits.Where(Directory.Exists))
+        {
+            // 版本目录按名称倒序，优先用最新的 SDK
+            var versions = Directory.GetDirectories(bin)
+                .OrderByDescending(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var version in versions)
+            {
+                foreach (var arch in new[] { "x64", "x86" })
+                {
+                    var candidate = Path.Combine(version, arch, fileName);
+                    if (File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool GetIsElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
+    }
 
     private static string PowerShellPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.Windows),
@@ -95,6 +165,18 @@ public static class ModernMenuService
             return new ModernMenuResult(false, "安装脚本缺失，无法安装新版菜单。", $"缺失文件：{InstallScript}");
         }
 
+        // 打包工具是硬性前提：缺了就别白弹一次 UAC
+        if (!HasPackagingTools)
+        {
+            return new ModernMenuResult(false,
+                "系统缺少打包工具，无法安装新版菜单。",
+                "新版右键菜单需要把扩展打成 MSIX 包并签名，这要用到 Windows SDK 里的 " +
+                "MakeAppx.exe 与 signtool.exe，当前系统没有找到它们。\n\n" +
+                "解决办法（任选其一）：\n" +
+                "1. 安装 Windows SDK：https://developer.microsoft.com/windows/downloads/windows-sdk/\n" +
+                "2. 只使用旧版右键菜单 —— 不需要任何额外组件，也不需要管理员权限。");
+        }
+
         var arguments =
             $"-ExternalPath \"{AppInfo.AppDirectory.TrimEnd('\\')}\" -ShellExtensionPath \"{shellDirectory.TrimEnd('\\')}\"";
 
@@ -102,8 +184,19 @@ public static class ModernMenuService
         if (exitCode == 0)
         {
             var version = GetInstalledVersion();
+            if (version is null)
+            {
+                // 提权到别的管理员账户时，包会注册到那个账户，当前用户查不到
+                return new ModernMenuResult(false,
+                    "扩展包已写入，但当前账户查不到，菜单可能不会出现。",
+                    "这通常是因为授权时用的是另一个管理员账户：MSIX 扩展按账户注册，" +
+                    "装到了管理员账户上，当前账户反而没有。\n\n" +
+                    "建议改用旧版右键菜单（无需管理员权限），或登录管理员账户后再运行本程序。" +
+                    DescribeLogTail(log));
+            }
+
             return new ModernMenuResult(true,
-                version is null ? "新版右键菜单扩展已安装。" : $"新版右键菜单扩展已安装（{version}）。",
+                $"新版右键菜单扩展已安装（{version}）。如果菜单没立刻出现，重启资源管理器或注销后重试。",
                 log);
         }
 
@@ -126,6 +219,17 @@ public static class ModernMenuService
         return new ModernMenuResult(false, DescribeFailure(exitCode, log), log);
     }
 
+    private static string DescribeLogTail(string log)
+    {
+        var lines = log.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .TakeLast(6)
+            .ToList();
+
+        return lines.Count == 0 ? string.Empty : "\n\n脚本输出：\n" + string.Join('\n', lines);
+    }
+
     private static string DescribeFailure(int exitCode, string log)
     {
         var lastLines = log
@@ -139,6 +243,7 @@ public static class ModernMenuService
         {
             1223 => "已取消管理员授权，新版菜单未安装。",
             2 => "系统缺少打包工具（MakeAppx / SignTool），请安装 Windows SDK 后重试。",
+            5 => "没有管理员权限，新版菜单未安装。请改用旧版菜单，或用管理员账户运行本程序。",
             6 => "注册扩展包失败，请查看详细信息。",
             _ => string.IsNullOrWhiteSpace(tail)
                 ? $"安装失败（退出码 {exitCode}）。"

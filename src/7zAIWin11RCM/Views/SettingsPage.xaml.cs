@@ -542,6 +542,8 @@ public sealed partial class SettingsPage : Page
 
     private async Task RefreshIntegrationStatusAsync()
     {
+        UpdateModernMenuHint();
+
         var legacyInstalled = LegacyMenuService.IsInstalled();
         ApplyStatusText(LegacyStatusText, legacyInstalled, legacyInstalled ? "已注册" : "未注册");
 
@@ -564,6 +566,32 @@ public sealed partial class SettingsPage : Page
         }
 
         ApplyStatusText(ModernStatusText, version is not null, version is null ? "未安装" : $"已安装 {version}");
+    }
+
+    /// <summary>按当前系统/账户情况说明新版菜单的前提条件，避免用户点了才发现缺东西。</summary>
+    private void UpdateModernMenuHint()
+    {
+        if (!ModernMenuService.IsSupported)
+        {
+            ModernMenuHint.Text = "当前系统不是 Windows 11，新版右键菜单不可用。";
+            ModernMenuCheck.IsEnabled = false;
+            return;
+        }
+
+        ModernMenuCheck.IsEnabled = true;
+
+        var parts = new List<string> { "在 Windows 11 紧凑菜单中直接显示 7-Zip 条目。" };
+
+        if (!ModernMenuService.HasPackagingTools)
+        {
+            parts.Add("启用前需要先安装 Windows SDK（提供 MakeAppx / SignTool）。");
+        }
+
+        parts.Add(ModernMenuService.IsUserAdministrator
+            ? "保存时会弹出 UAC 授权。"
+            : "当前账户不是管理员：授权时要输入管理员账户密码，而扩展会注册到那个管理员账户，本账户多半看不到。这种情况建议改用旧版菜单。");
+
+        ModernMenuHint.Text = string.Concat(parts);
     }
 
     private static void ApplyStatusText(TextBlock target, bool? ok, string text)

@@ -65,6 +65,19 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 - 添加到压缩包（生成 `名称.7z`）
 - 用 7-Zip 打开
 
+### 命令行开关旧版菜单
+
+不想开界面时可以直接用命令行，适合写脚本或排错：
+
+```powershell
+# 写入（目录可省略，省略时自动查找 7-Zip）
+SevenZipAIWin11RCM.exe --legacy-menu on
+SevenZipAIWin11RCM.exe --legacy-menu on --seven-zip "D:\Apps\7-Zip"
+
+# 移除
+SevenZipAIWin11RCM.exe --legacy-menu off
+```
+
 ### 如果本机还没装 7-Zip
 
 程序检测不到 7-Zip 时，路径输入框右侧会多出一个「安装 7-Zip」按钮，点它走三步向导：
@@ -96,8 +109,19 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 | 需要额外组件 | 无 | Windows SDK 的 `MakeAppx.exe` / `signtool.exe` |
 | 生效时间 | 立即 | 需重启「Windows 资源管理器」 |
 | 适用系统 | Windows 10 / 11 | Windows 11 22000+ |
+| 标准用户账户 | 可用 | 不可用（见下） |
 
 > Windows 11 的紧凑菜单**只接受带「应用包标识」的 `IExplorerCommand` 扩展**，普通注册表项无法进入该菜单 —— 这就是新版菜单需要单独安装扩展包的原因。
+
+> ⚠️ **标准（非管理员）账户用不了新版菜单**：MSIX 扩展是按账户注册的。用管理员账户密码授权时，包会装到那个管理员账户上，当前账户依然看不到菜单。这种情况请只用旧版菜单 —— 它不需要任何权限，功能也完全够用。
+
+### 旧版菜单的子菜单是怎么做的
+
+父项用 `ExtendedSubCommandsKey` 指向 `HKCU\Software\Classes\7zAIWin11RCM.File`（文件夹是 `...Folder`）这个独立键，真正的动作放在该键的 `shell` 子键下。
+
+实测（Windows 11 Build 26200）**空 `SubCommands` 和显式动词列表都只会渲染出一个空菜单**，只有 `ExtendedSubCommandsKey` 能正常列出子项；因此三种写法里选了后者。
+
+文件夹空白处的右菜单更特殊：`Directory\Background` 作用域下三种级联写法全部失效，所以那里不做二级菜单，直接挂一条「7-Zip 添加到压缩包」。
 
 ## 新版菜单是怎么实现的
 
@@ -184,8 +208,13 @@ tag 去掉前缀 `v` 后就是版本号，会写入 exe 的文件版本、关于
 
 ## 常见问题
 
+**旧版菜单里 7-Zip 变成了空菜单 / 点开什么都没有？**
+v1.0.0 的子菜单写法在新版 Windows 11 上不再生效（父项在、子项为空）。v1.0.1 起改用 `ExtendedSubCommandsKey`，更新程序后**取消勾选保存一次、再勾选保存一次**（或直接跑 `--legacy-menu off` 再 `--legacy-menu on`）即可清除旧写法。
+
 **勾了新版菜单但菜单里没有？**
-重启「Windows 资源管理器」（任务管理器 → 右键 → 重新启动），再确认包已安装：
+先确认当前是不是管理员账户。标准账户即使输入管理员密码授权，扩展也会装到那个管理员账户上，当前账户依旧看不到 —— 这种情况请用旧版菜单。
+
+管理员账户则重启「Windows 资源管理器」（任务管理器 → 右键 → 重新启动），再确认包已安装：
 
 ```powershell
 Get-AppxPackage -Name 7zAIWin11RCM.ShellExt
@@ -203,12 +232,17 @@ Get-AppxPackage -Name 7zAIWin11RCM.ShellExt
 **如何彻底清理？**
 
 ```powershell
-# 旧版菜单
+# 旧版菜单（父项）
 Remove-Item -Recurse "HKCU:\Software\Classes\*\shell\7zAIWin11RCM"
 Remove-Item -Recurse "HKCU:\Software\Classes\Directory\shell\7zAIWin11RCM"
 Remove-Item -Recurse "HKCU:\Software\Classes\Directory\Background\shell\7zAIWin11RCM"
 Remove-Item -Recurse "HKCU:\Software\Classes\Drive\shell\7zAIWin11RCM"
 Remove-Item -Recurse "HKCU:\Software\Classes\Folder\shell\7zAIWin11RCM"
+
+# 旧版菜单（子菜单动作）
+Remove-Item -Recurse "HKCU:\Software\Classes\7zAIWin11RCM.File"
+Remove-Item -Recurse "HKCU:\Software\Classes\7zAIWin11RCM.Folder"
+Remove-Item -Recurse "HKCU:\Software\Classes\7zAIWin11RCM.Background"
 
 # 新版菜单
 Get-AppxPackage -Name 7zAIWin11RCM.ShellExt | Remove-AppxPackage
