@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="SevenZipAIWin11RCM.Views.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel
+            MaxWidth="920"
+            Padding="28,20,28,32"
+            HorizontalAlignment="Stretch"
+            Spacing="18">
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="关于" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock
+                    Text="一个小工具，让 7-Zip 回到 Windows 11 的右键菜单里。"
+                    Style="{StaticResource DescriptionTextBlockStyle}" />
+            </StackPanel>
+
+            <!-- 应用信息 -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <Grid ColumnSpacing="18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Image
+                        x:Name="HeroIcon"
+                        Width="56"
+                        Height="56"
+                        VerticalAlignment="Top" />
+
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <TextBlock Text="7-Zip 右键菜单助手" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock x:Name="VersionText" Style="{StaticResource DescriptionTextBlockStyle}" />
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            TextWrapping="Wrap"
+                            Text="把 7-Zip 的解压 / 压缩命令接入 Windows 11 的新版（紧凑）右键菜单与旧版（经典）右键菜单，可随时开关。" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- 作者 -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="作者" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <Grid ColumnSpacing="16" RowSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="76" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="作者" />
+                        <TextBlock Grid.Column="1" Text="Minecraftmc22" />
+
+                        <TextBlock
+                            Grid.Row="1"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="GitHub" />
+                        <HyperlinkButton
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            Padding="0"
+                            Content="github.com/Minecraftmc22"
+                            NavigateUri="https://github.com/Minecraftmc22" />
+
+                        <TextBlock
+                            Grid.Row="2"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="博客" />
+                        <HyperlinkButton
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            Padding="0"
+                            Content="minecraftmc22.top"
+                            NavigateUri="https://minecraftmc22.top" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 仓库 -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="仓库地址" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox
+                            x:Name="RepositoryBox"
+                            IsReadOnly="True"
+                            IsSpellCheckEnabled="False" />
+
+                        <Button
+                            x:Name="CopyButton"
+                            Grid.Column="1"
+                            Click="CopyButton_Click"
+                            Content="复制" />
+
+                        <Button
+                            Grid.Column="2"
+                            Click="OpenRepositoryButton_Click"
+                            Content="在浏览器中打开" />
+                    </Grid>
+
+                    <TextBlock
+                        Style="{StaticResource DescriptionTextBlockStyle}"
+                        Text="克隆命令：git clone https://github.com/Minecraftmc22/7zAIWin11RCM.git" />
+                </StackPanel>
+            </Border>
+
+            <!-- 运行环境 -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="运行环境" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <Grid ColumnSpacing="16" RowSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="76" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="系统" />
+                        <TextBlock x:Name="OsText" Grid.Column="1" TextWrapping="Wrap" />
+
+                        <TextBlock
+                            Grid.Row="1"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="配置目录" />
+                        <TextBlock
+                            x:Name="DataDirectoryText"
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            IsTextSelectionEnabled="True"
+                            TextWrapping="Wrap" />
+
+                        <TextBlock
+                            Grid.Row="2"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="日志" />
+                        <HyperlinkButton
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            Padding="0"
+                            Click="OpenLogButton_Click"
+                            Content="打开 app.log 所在位置" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <TextBlock
+                Margin="2,4,0,0"
+                HorizontalAlignment="Left"
+                Style="{StaticResource DescriptionTextBlockStyle}"
+                Text="© 2026 Minecraftmc22 · MIT License · 与 7-Zip 官方无关，仅调用其命令行/GUI 组件。" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

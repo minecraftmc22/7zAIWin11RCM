@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>SevenZipAIWin11RCM</RootNamespace>
+    <!-- 程序集名不能以数字开头：C#/WinRT 的 vtable 生成器会拼出非法标识符 -->
+    <AssemblyName>SevenZipAIWin11RCM</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64;ARM64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <!-- 自定义 Main：右键菜单动词走无窗口快速路径，秒开 -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <DefaultLanguage>zh-CN</DefaultLanguage>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Product>7-Zip 右键菜单助手</Product>
+    <AssemblyTitle>7-Zip 右键菜单助手</AssemblyTitle>
+    <Company>Minecraftmc22</Company>
+    <Copyright>Copyright © 2026 Minecraftmc22</Copyright>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.250606001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\app.ico" />
+    <Content Include="Assets\*.png" />
+    <!-- 新版右键菜单的安装/卸载脚本，随应用一起发布 -->
+    <Content Include="..\..\scripts\*.ps1" Link="scripts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\packaging\AppxManifest.xml" Link="packaging\AppxManifest.xml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\packaging\Assets\*.png" Link="packaging\Assets\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- 把 COM 宿主扩展的产物拷到输出目录 shell\ 子目录，供安装脚本与 MSIX 清单使用 -->
+  <Target Name="CopyShellExtension" AfterTargets="Build">
+    <ItemGroup>
+      <ShellExtFiles Include="$(MSBuildThisFileDirectory)..\SevenZipAIWin11RCM.ShellExt\bin\$(Configuration)\net8.0-windows10.0.19041.0\win-x64\*.dll" />
+      <ShellExtFiles Include="$(MSBuildThisFileDirectory)..\SevenZipAIWin11RCM.ShellExt\bin\$(Configuration)\net8.0-windows10.0.19041.0\win-x64\*.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ShellExtFiles)" DestinationFolder="$(OutDir)shell" SkipUnchangedFiles="true" Condition="'@(ShellExtFiles)' != ''" />
+  </Target>
+
+</Project>

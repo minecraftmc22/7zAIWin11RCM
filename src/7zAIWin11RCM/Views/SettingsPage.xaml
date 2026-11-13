@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="SevenZipAIWin11RCM.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                MaxWidth="920"
+                Padding="28,20,28,28"
+                HorizontalAlignment="Stretch"
+                Spacing="18">
+
+                <!-- 页头 -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}" />
+                    <TextBlock
+                        Text="把 7-Zip 的解压 / 压缩命令放进 Windows 11 的右键菜单里。"
+                        Style="{StaticResource DescriptionTextBlockStyle}" />
+                </StackPanel>
+
+                <!-- 7-Zip 安装位置 -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="7-Zip 安装位置" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock
+                                    Text="指向包含 7zG.exe 与 7zFM.exe 的目录，例如 C:\Program Files\7-Zip。默认自动查找。"
+                                    Style="{StaticResource DescriptionTextBlockStyle}" />
+                            </StackPanel>
+
+                            <Border
+                                x:Name="PathBadge"
+                                Grid.Column="1"
+                                Padding="10,3"
+                                VerticalAlignment="Top"
+                                CornerRadius="10">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon x:Name="PathBadgeIcon" FontSize="12" Glyph="&#xE73E;" />
+                                    <TextBlock x:Name="PathBadgeText" FontSize="12" Text="检测中" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox
+                                x:Name="PathBox"
+                                IsSpellCheckEnabled="False"
+                                PlaceholderText="C:\Program Files\7-Zip"
+                                TextChanged="PathBox_TextChanged" />
+
+                            <Button
+                                Grid.Column="1"
+                                Click="BrowseButton_Click"
+                                Content="浏览…" />
+
+                            <Button
+                                Grid.Column="2"
+                                Click="AutoDetectButton_Click"
+                                Content="自动查找" />
+                        </Grid>
+
+                        <InfoBar
+                            x:Name="DetectBar"
+                            IsClosable="False"
+                            IsOpen="False" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 右键菜单选项 -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="右键菜单集成" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox
+                                x:Name="ModernMenuCheck"
+                                VerticalAlignment="Top"
+                                Checked="MenuOption_Changed"
+                                Unchecked="MenuOption_Changed">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="添加至 Windows 11 新版右键菜单" />
+                                    <TextBlock
+                                        MaxWidth="620"
+                                        Style="{StaticResource DescriptionTextBlockStyle}"
+                                        Text="在 Windows 11 紧凑菜单中直接显示 7-Zip 条目。需要一次性安装扩展包，过程中会请求管理员权限。" />
+                                </StackPanel>
+                            </CheckBox>
+
+                            <TextBlock
+                                x:Name="ModernStatusText"
+                                Grid.Column="1"
+                                Margin="12,8,0,0"
+                                VerticalAlignment="Top"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="—" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox
+                                x:Name="LegacyMenuCheck"
+                                VerticalAlignment="Top"
+                                IsChecked="True"
+                                Checked="MenuOption_Changed"
+                                Unchecked="MenuOption_Changed">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="添加至 Windows 11 旧版右键菜单（默认为开）" />
+                                    <TextBlock
+                                        MaxWidth="620"
+                                        Style="{StaticResource DescriptionTextBlockStyle}"
+                                        Text="写入经典菜单（「显示更多选项」或 Shift + 右键）。无需管理员权限，兼容 Windows 10 / 11。" />
+                                </StackPanel>
+                            </CheckBox>
+
+                            <TextBlock
+                                x:Name="LegacyStatusText"
+                                Grid.Column="1"
+                                Margin="12,8,0,0"
+                                VerticalAlignment="Top"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="—" />
+                        </Grid>
+
+                        <Expander HorizontalAlignment="Stretch" Header="为什么「新版右键菜单」需要安装扩展包？">
+                            <TextBlock
+                                Margin="0,4,0,0"
+                                Style="{StaticResource DescriptionTextBlockStyle}"
+                                Text="Windows 11 的紧凑菜单只接受带有「应用包标识」的 IExplorerCommand 扩展，普通注册表项无法出现在其中。本工具会构建一个稀疏 MSIX 包（sparse package）并注册随附的 COM 扩展，因此首次开启需要管理员权限。若安装失败，可点「查看日志」排查，旧版菜单不受影响。" />
+                        </Expander>
+                    </StackPanel>
+                </Border>
+
+                <!-- 结果提示 -->
+                <InfoBar
+                    x:Name="ResultBar"
+                    IsClosable="True"
+                    IsOpen="False" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 底部操作栏 -->
+        <Border
+            Grid.Row="1"
+            Padding="24,12"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock
+                        x:Name="DirtyText"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="● 有未保存的更改"
+                        Visibility="Collapsed" />
+                    <HyperlinkButton
+                        Padding="0"
+                        Click="OpenLogButton_Click"
+                        Content="查看日志" />
+                </StackPanel>
+
+                <Button
+                    x:Name="SaveButton"
+                    Grid.Column="1"
+                    Click="SaveButton_Click"
+                    Content="保存"
+                    IsEnabled="False"
+                    Style="{StaticResource AccentButtonStyle}" />
+
+                <Button
+                    x:Name="ResetButton"
+                    Grid.Column="2"
+                    Click="ResetButton_Click"
+                    Content="恢复默认" />
+
+                <Button
+                    x:Name="CancelButton"
+                    Grid.Column="3"
+                    Click="CancelButton_Click"
+                    Content="取消保存"
+                    IsEnabled="False" />
+            </Grid>
+        </Border>
+
+        <!-- 忙碌遮罩 -->
+        <Grid
+            x:Name="BusyOverlay"
+            Grid.RowSpan="2"
+            Background="#66000000"
+            Visibility="Collapsed">
+            <StackPanel
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12">
+                <ProgressRing
+                    Width="36"
+                    Height="36"
+                    Foreground="White"
+                    IsActive="True" />
+                <TextBlock
+                    x:Name="BusyText"
+                    HorizontalAlignment="Center"
+                    Foreground="White"
+                    Text="正在应用设置…" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>
