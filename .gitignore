@@ -493,3 +493,6 @@ packaging/AppPackages/
 # 本地构建脚本产物
 build/
 artifacts/
+
+# 工具链本地数据
+.workbuddy/
