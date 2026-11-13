@@ -3,6 +3,11 @@
   稀疏 MSIX 包（sparse package）清单。
   由 scripts\install-modern-menu.ps1 打包、签名并注册，ExternalLocation 指向应用安装目录。
   这样 7-Zip 的条目就能出现在 Windows 11 新版（紧凑）右键菜单中。
+
+  注意几处容易踩坑的地方：
+    1. uap10:AllowExternalContent 是 <Properties> 的子元素，不是 <Package> 的属性；
+    2. <Extensions> 必须放在 <Application> 里面，不能挂在 <Package> 下；
+    3. 稀疏包需要 uap10:TrustLevel="mediumIL" 与 uap10:RuntimeBehavior="win32App"。
 -->
 <Package
     xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -12,8 +17,7 @@
     xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
     xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
     xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
-    IgnorableNamespaces="uap uap10 rescap desktop4 desktop5 com"
-    uap10:AllowExternalContent="true">
+    IgnorableNamespaces="uap uap10 rescap desktop4 desktop5 com">
 
   <Identity
       Name="7zAIWin11RCM.ShellExt"
@@ -25,6 +29,8 @@
     <DisplayName>7-Zip 右键菜单扩展</DisplayName>
     <PublisherDisplayName>Minecraftmc22</PublisherDisplayName>
     <Logo>packaging\Assets\StoreLogo.png</Logo>
+    <!-- 稀疏包：允许引用包外部（应用安装目录）里的文件 -->
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
   </Properties>
 
   <Dependencies>
@@ -37,56 +43,61 @@
   </Resources>
 
   <Applications>
-    <Application Id="App" Executable="SevenZipAIWin11RCM.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application
+        Id="App"
+        Executable="SevenZipAIWin11RCM.exe"
+        uap10:TrustLevel="mediumIL"
+        uap10:RuntimeBehavior="win32App">
       <uap:VisualElements
           DisplayName="7-Zip 右键菜单扩展"
           Description="把 7-Zip 的解压 / 压缩命令加入 Windows 11 新版右键菜单"
           BackgroundColor="#1D4ED8"
           Square150x150Logo="packaging\Assets\Square150Logo.png"
-          Square44x44Logo="packaging\Assets\Square44x44Logo.png" />
+          Square44x44Logo="packaging\Assets\Square44Logo.png" />
+
+      <Extensions>
+        <!-- 进程内 COM 服务器：三个 IExplorerCommand 实现 -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="7zAIWin11RCM Shell Extension">
+              <com:Class
+                  Id="6F3A1B20-7C4D-4E71-9A55-0D1B2C3E4F01"
+                  Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
+                  ThreadingModel="Both" />
+              <com:Class
+                  Id="6F3A1B21-7C4D-4E71-9A55-0D1B2C3E4F02"
+                  Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
+                  ThreadingModel="Both" />
+              <com:Class
+                  Id="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03"
+                  Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
+                  ThreadingModel="Both" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+
+        <!-- 新版右键菜单入口 -->
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type="*">
+              <desktop5:Verb Id="ExtractHere" Clsid="6F3A1B20-7C4D-4E71-9A55-0D1B2C3E4F01" />
+              <desktop5:Verb Id="ExtractTo" Clsid="6F3A1B21-7C4D-4E71-9A55-0D1B2C3E4F02" />
+              <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory">
+              <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory\Background">
+              <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+      </Extensions>
     </Application>
   </Applications>
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
   </Capabilities>
-
-  <Extensions>
-    <!-- 进程内 COM 服务器：三个 IExplorerCommand 实现 -->
-    <com:Extension Category="windows.comServer">
-      <com:ComServer>
-        <com:SurrogateServer DisplayName="7zAIWin11RCM Shell Extension">
-          <com:Class
-              Id="6F3A1B20-7C4D-4E71-9A55-0D1B2C3E4F01"
-              Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
-              ThreadingModel="Both" />
-          <com:Class
-              Id="6F3A1B21-7C4D-4E71-9A55-0D1B2C3E4F02"
-              Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
-              ThreadingModel="Both" />
-          <com:Class
-              Id="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03"
-              Path="shell\SevenZipAIWin11RCM.ShellExt.comhost.dll"
-              ThreadingModel="Both" />
-        </com:SurrogateServer>
-      </com:ComServer>
-    </com:Extension>
-
-    <!-- 新版右键菜单入口 -->
-    <desktop4:Extension Category="windows.fileExplorerContextMenus">
-      <desktop4:FileExplorerContextMenus>
-        <desktop5:ItemType Type="*">
-          <desktop5:Verb Id="ExtractHere" Clsid="6F3A1B20-7C4D-4E71-9A55-0D1B2C3E4F01" />
-          <desktop5:Verb Id="ExtractTo" Clsid="6F3A1B21-7C4D-4E71-9A55-0D1B2C3E4F02" />
-          <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
-        </desktop5:ItemType>
-        <desktop5:ItemType Type="Directory">
-          <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
-        </desktop5:ItemType>
-        <desktop5:ItemType Type="Directory\Background">
-          <desktop5:Verb Id="AddToArchive" Clsid="6F3A1B22-7C4D-4E71-9A55-0D1B2C3E4F03" />
-        </desktop5:ItemType>
-      </desktop4:FileExplorerContextMenus>
-    </desktop4:Extension>
-  </Extensions>
 </Package>

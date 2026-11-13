@@ -118,7 +118,9 @@ try {
     if (Test-Path -LiteralPath $msix) { Remove-Item -LiteralPath $msix -Force }
 
     Write-Log '正在打包稀疏 MSIX…'
-    & $makeAppx pack /o /d $stage /p $msix | ForEach-Object { Write-Log $_ }
+    # /nv：稀疏包引用的 exe / DLL 都在外部安装目录里，不在包内，
+    #     必须跳过"清单里引用的文件是否存在于包内"的校验。
+    & $makeAppx pack /o /nv /d $stage /p $msix | ForEach-Object { Write-Log $_ }
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $msix)) {
         Write-Log "错误：MakeAppx 打包失败（退出码 $LASTEXITCODE）。"
         exit 3
@@ -137,7 +139,7 @@ try {
             -KeyUsage DigitalSignature `
             -FriendlyName '7zAIWin11RCM 右键菜单扩展' `
             -CertStoreLocation 'Cert:\LocalMachine\My' `
-            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') `
             -NotAfter (Get-Date).AddYears(10)
     }
 
@@ -153,7 +155,9 @@ try {
     }
 
     Write-Log '正在签名…'
-    & $signtool sign /fd SHA256 /td SHA256 /sha1 $certificate.Thumbprint $msix |
+    # 不做时间戳：/td 必须与 /tr 成对出现，而时间戳服务器在离线环境下可能连不上。
+    # 本地自签名 + 受信任人存储的包不需要时间戳。
+    & $signtool sign /fd SHA256 /sha1 $certificate.Thumbprint $msix |
         ForEach-Object { Write-Log $_ }
     if ($LASTEXITCODE -ne 0) {
         Write-Log "错误：签名失败（退出码 $LASTEXITCODE）。"
