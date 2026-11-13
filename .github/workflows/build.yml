@@ -84,10 +84,17 @@ jobs:
           body: |
             ## 下载
 
-            - `${{ steps.package.outputs.name }}`：Windows x64 免安装版，解压后运行 `SevenZipAIWin11RCM.exe`（需要 .NET 8 运行时）。
+            - `${{ steps.package.outputs.name }}`：Windows x64 免安装版，解压到任意目录后运行 `SevenZipAIWin11RCM.exe`。
 
-            ## 说明
+            ## 环境要求
 
-            - 旧版右键菜单：勾选后点「保存」即可，无需管理员权限。
-            - 新版右键菜单：首次开启会请求管理员权限安装扩展包，需要系统装有 Windows SDK 的 `MakeAppx` / `signtool`。
-            - 完整说明见仓库 [README](https://github.com/Minecraftmc22/7zAIWin11RCM#readme)。
+            - **Windows 11**（Windows 10 1809 及以上可运行，但新版右键菜单仅 Windows 11 支持）
+            - **.NET 8 桌面运行时**：若启动时提示缺少运行时，从 [这里下载](https://dotnet.microsoft.com/zh-cn/download/dotnet/8.0)（Windows x64 的「Desktop Runtime」）
+
+            ## 功能
+
+            - **旧版右键菜单**：勾选后点「保存」立即生效，**无需管理员权限**
+            - **新版右键菜单**：首次开启会请求管理员权限安装 COM 扩展，需要系统装有 Windows SDK 的 `MakeAppx` / `signtool`
+            - **安装 / 更新 7-Zip**：没装 7-Zip 时可一键下载安装；已装时可自动检查并升级到最新版
+
+            完整说明见仓库 [README](https://github.com/Minecraftmc22/7zAIWin11RCM#readme)。
