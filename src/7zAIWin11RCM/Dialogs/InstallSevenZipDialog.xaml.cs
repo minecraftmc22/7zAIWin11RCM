@@ -32,6 +32,14 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
     /// <summary>安装成功后的安装目录；未成功则为 null。</summary>
     public string? InstalledPath { get; private set; }
 
+    /// <summary>更新模式：预先指定的版本，跳过版本选择直接下载。</summary>
+    public SevenZipRelease? PresetRelease { get; set; }
+
+    /// <summary>更新模式：固定安装到该目录（覆盖升级，不允许浏览）。</summary>
+    public string? UpdateTargetDirectory { get; set; }
+
+    private bool IsUpdate => !string.IsNullOrWhiteSpace(UpdateTargetDirectory);
+
     public InstallSevenZipDialog()
     {
         InitializeComponent();
@@ -46,6 +54,25 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
 
     private async void ContentDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
     {
+        if (PresetRelease is not null)
+        {
+            // 更新模式：版本已确定，直接开始下载
+            _selectedRelease = PresetRelease;
+            _selectedAsset = PresetRelease.PickForCurrentArchitecture();
+            if (_selectedAsset is null)
+            {
+                GoToStep(Step.Version);
+                FetchBar.Severity = InfoBarSeverity.Error;
+                FetchBar.Title = "没有可用的安装包";
+                FetchBar.Message = $"7-Zip {PresetRelease.Version} 没有适用于当前系统的安装包。";
+                FetchBar.IsOpen = true;
+                return;
+            }
+
+            await StartDownloadAsync();
+            return;
+        }
+
         GoToStep(Step.Version);
 
         VersionRing.IsActive = true;
@@ -169,6 +196,9 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
         GoToStep(Step.Download);
         DownloadBar.Value = 0;
         DownloadDetail.Text = "正在连接…";
+        DownloadTitle.Text = IsUpdate
+            ? $"正在下载 7-Zip {_selectedRelease?.Version} 安装包…"
+            : "正在下载安装包…";
         DownloadNameText.Text = _selectedAsset.Name;
         DownloadErrorBar.IsOpen = false;
 
@@ -208,9 +238,23 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
 
     private void PrepareDirectoryStep()
     {
+        InstallBar.IsOpen = false;
+
+        if (UpdateTargetDirectory is { Length: > 0 } fixedTarget)
+        {
+            // 更新模式：覆盖升级到现有目录，不允许改动
+            _targetDirectory = fixedTarget;
+            TargetBox.Text = fixedTarget;
+            BrowseButton.Visibility = Visibility.Collapsed;
+            DirectoryHintText.Text = "会在现有安装目录上覆盖升级，7-Zip 原有设置与右键集成保持在原位。";
+            InstallHintText.Text = "更新需要管理员权限，稍后会弹出 UAC 提示。";
+            return;
+        }
+
         _targetDirectory = SevenZipInstaller.ResolveTargetDirectory(SevenZipInstaller.DefaultInstallRoot);
         TargetBox.Text = _targetDirectory;
-        InstallBar.IsOpen = false;
+        BrowseButton.Visibility = Visibility.Visible;
+        DirectoryHintText.Text = "会在所选目录下自动创建 7-Zip 子文件夹；若已直接选中 7-Zip 目录则原样使用。";
         InstallHintText.Text = "安装到该目录需要管理员权限，稍后会弹出 UAC 提示。";
     }
 
@@ -274,7 +318,7 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
                 InstalledPath = result.Directory ?? target;
                 GoToStep(Step.Done);
                 FinishBar.Severity = InfoBarSeverity.Success;
-                FinishBar.Title = "安装成功";
+                FinishBar.Title = IsUpdate ? "更新成功" : "安装成功";
                 FinishBar.Message = result.Message;
                 FinishBar.IsOpen = true;
             }
@@ -311,6 +355,9 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
     {
         _step = step;
 
+        var action = IsUpdate ? "更新" : "安装";
+        var total = IsUpdate ? "2" : "3";
+
         VersionStep.Visibility = step == Step.Version ? Visibility.Visible : Visibility.Collapsed;
         DownloadStep.Visibility = step == Step.Download ? Visibility.Visible : Visibility.Collapsed;
         DirectoryStep.Visibility = step == Step.Directory ? Visibility.Visible : Visibility.Collapsed;
@@ -323,35 +370,38 @@ public sealed partial class InstallSevenZipDialog : ContentDialog
         switch (step)
         {
             case Step.Version:
-                Title = "安装 7-Zip（1/3 选择版本）";
+                Title = $"{action} 7-Zip（1/{total} 选择版本）";
                 PrimaryButtonText = "下一步";
                 CloseButtonText = "取消";
                 IsPrimaryButtonEnabled = _releases.Count > 0 && _selectedAsset is not null;
                 break;
 
             case Step.Download:
-                Title = "安装 7-Zip（2/3 下载安装包）";
+                Title = $"{action} 7-Zip（{(IsUpdate ? "1" : "2")}/{total} 下载安装包）";
                 PrimaryButtonText = "下一步";
                 CloseButtonText = "取消";
                 IsPrimaryButtonEnabled = false;
                 break;
 
             case Step.Directory:
-                Title = "安装 7-Zip（3/3 选择安装位置）";
-                PrimaryButtonText = "开始安装";
+                Title = $"{action} 7-Zip（{(IsUpdate ? "2" : "3")}/{total} 确认安装位置）";
+                PrimaryButtonText = IsUpdate ? "开始更新" : "开始安装";
                 CloseButtonText = "取消";
                 IsPrimaryButtonEnabled = true;
                 break;
 
             case Step.Installing:
-                Title = "正在安装 7-Zip";
-                PrimaryButtonText = "安装中…";
+                Title = $"正在{action} 7-Zip";
+                PrimaryButtonText = $"{action}中…";
+                InstallingText.Text = IsUpdate
+                    ? "正在更新，请在弹出的 UAC 提示中选择「是」…"
+                    : "正在安装，请在弹出的 UAC 提示中选择「是」…";
                 CloseButtonText = string.Empty;
                 IsPrimaryButtonEnabled = false;
                 break;
 
             case Step.Done:
-                Title = "安装完成";
+                Title = $"{action}完成";
                 PrimaryButtonText = "完成";
                 CloseButtonText = string.Empty;
                 IsPrimaryButtonEnabled = true;

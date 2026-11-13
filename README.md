@@ -16,6 +16,7 @@
 | --- | --- |
 | 自动查找 7-Zip | 依次查注册表（`HKLM\SOFTWARE\7-Zip` 的 `Path64` / `Path`）、Program Files、PATH、便携版目录 |
 | 一键安装 7-Zip | 没装 7-Zip 时出现「安装 7-Zip」按钮：选版本（默认最新）→ 带进度下载 → 选目录 → 静默安装 |
+| 检查更新 | 已装 7-Zip 时出现「更新 7-Zip」按钮：自动比对在线最新版，有新版本就带进度下载并覆盖升级 |
 | 手动指定 | 「浏览…」选择安装目录；也接受直接填入 `7zG.exe` 的路径 |
 | 新版右键菜单 | 在 Windows 11 紧凑菜单里直接出现 7-Zip 条目（稀疏 MSIX + COM 扩展） |
 | 旧版右键菜单 | 写入经典菜单（`显示更多选项` 或 `Shift + 右键`），**默认开启** |
@@ -76,6 +77,15 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 
 安装完成后路径会自动填回设置页，点「保存」即可连同菜单选项一起生效。
 
+### 检查并更新 7-Zip
+
+检测到 7-Zip 后，同一个位置会换成「更新 7-Zip」按钮，点一下即自动完成版本比对：
+
+- 读取本机 `7zFM.exe` 的版本号（例如 `25.01`），与在线最新版（例如 `26.06`）按「主.次」两段数值比较；
+- 已是最新 → 弹窗告诉你当前版本与在线版本，什么都不用做；
+- 有新版本 → 直接进入更新向导：自动下载对应架构的安装包（带进度），确认安装位置后点「开始更新」，静默覆盖升级到**原有安装目录**（目录只读、无法误改，7-Zip 原有设置与右键集成保持在原位）；
+- 版本号读不出来时（极少见）会直接按最新版覆盖安装，不影响使用。
+
 ## 两种菜单有什么区别
 
 | | 旧版（经典）菜单 | 新版（紧凑）菜单 |
@@ -128,11 +138,12 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 │  │  ├─ MainWindow.xaml         导航外壳（Mica / 自定义标题栏）
 │  │  ├─ Views\SettingsPage      设置页（路径 / 安装按钮 / 两个勾选框 / 底部操作栏）
 │  │  ├─ Views\AboutPage         关于页（作者 / 仓库 / 运行环境）
-│  │  ├─ Dialogs\InstallSevenZipDialog  安装 7-Zip 三步向导
+│  │  ├─ Dialogs\InstallSevenZipDialog  安装 / 更新 7-Zip 向导
 │  │  └─ Services
 │  │     ├─ SevenZipLocator.cs   7-Zip 自动查找与校验
 │  │     ├─ SevenZipReleaseCatalog.cs  从 GitHub Release 拉取版本列表
 │  │     ├─ SevenZipInstaller.cs 下载安装包（带进度）与静默安装
+│  │     ├─ SevenZipVersion.cs   版本号解析与比较（主.次两段）
 │  │     ├─ LegacyMenuService.cs 旧版菜单注册表读写
 │  │     ├─ ModernMenuService.cs 新版菜单扩展安装/卸载（调用 PowerShell）
 │  │     ├─ ShellVerbHandler.cs  右键菜单实际执行的命令（解压 / 压缩 / 打开）

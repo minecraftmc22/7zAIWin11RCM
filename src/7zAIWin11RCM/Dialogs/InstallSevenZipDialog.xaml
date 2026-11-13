@@ -50,7 +50,7 @@
 
         <!-- 第 2 步：下载 -->
         <StackPanel x:Name="DownloadStep" Spacing="12" Visibility="Collapsed">
-            <TextBlock x:Name="DownloadTitle" Text="正在下载安装包…" />
+            <TextBlock x:Name="DownloadTitle" Text="正在下载安装包…" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
             <ProgressBar
                 x:Name="DownloadBar"
@@ -78,8 +78,9 @@
         <StackPanel x:Name="DirectoryStep" Spacing="12" Visibility="Collapsed">
             <TextBlock Text="安装目录" Style="{StaticResource BodyStrongTextBlockStyle}" />
             <TextBlock
-                Text="会在所选目录下自动创建 7-Zip 子文件夹；若已直接选中 7-Zip 目录则原样使用。"
-                Style="{StaticResource DescriptionTextBlockStyle}" />
+                x:Name="DirectoryHintText"
+                Style="{StaticResource DescriptionTextBlockStyle}"
+                Text="会在所选目录下自动创建 7-Zip 子文件夹；若已直接选中 7-Zip 目录则原样使用。" />
 
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
@@ -93,6 +94,7 @@
                     IsSpellCheckEnabled="False" />
 
                 <Button
+                    x:Name="BrowseButton"
                     Grid.Column="1"
                     Click="BrowseButton_Click"
                     Content="浏览…" />
@@ -116,7 +118,10 @@
                     Width="20"
                     Height="20"
                     IsActive="True" />
-                <TextBlock VerticalAlignment="Center" Text="正在安装，请在弹出的 UAC 提示中选择「是」…" />
+                <TextBlock
+                    x:Name="InstallingText"
+                    VerticalAlignment="Center"
+                    Text="正在安装，请在弹出的 UAC 提示中选择「是」…" />
             </StackPanel>
 
             <InfoBar

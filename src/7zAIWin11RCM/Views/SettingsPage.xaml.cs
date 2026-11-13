@@ -135,8 +135,9 @@ public sealed partial class SettingsPage : Page
         var input = PathBox.Text;
         var install = SevenZipLocator.Validate(input);
 
-        // 只有"没找到可用 7-Zip"时才提供安装入口
+        // 没找到 → 显示「安装」；已找到 → 显示「更新」
         InstallSevenZipButton.Visibility = install is null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSevenZipButton.Visibility = install is null ? Visibility.Collapsed : Visibility.Visible;
 
         if (install is null)
         {
@@ -281,6 +282,99 @@ public sealed partial class SettingsPage : Page
         ResultBar.Title = "7-Zip 安装完成";
         ResultBar.Message =
             $"已安装到 {PathBox.Text}。点击右下角「保存」把该路径与菜单选项一起生效。";
+        ResultBar.IsOpen = true;
+    }
+
+    /// <summary>检查在线版本并引导更新（覆盖安装到现有目录）。</summary>
+    private async void UpdateSevenZipButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        var install = SevenZipLocator.Validate(PathBox.Text);
+        if (install is null)
+        {
+            UpdatePathStatus();
+            return;
+        }
+
+        UpdateSevenZipButton.IsEnabled = false;
+        UpdateSevenZipButton.Content = "检查中…";
+
+        ReleaseCatalogResult catalog;
+        try
+        {
+            catalog = await SevenZipReleaseCatalog.FetchAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Write("检查 7-Zip 更新失败", ex);
+            ResultBar.Severity = InfoBarSeverity.Error;
+            ResultBar.Title = "检查更新失败";
+            ResultBar.Message = ex.Message;
+            ResultBar.IsOpen = true;
+            return;
+        }
+        finally
+        {
+            UpdateSevenZipButton.Content = "更新 7-Zip";
+            UpdateSevenZipButton.IsEnabled = true;
+        }
+
+        var latest = catalog.Releases.FirstOrDefault();
+        if (latest is null)
+        {
+            ResultBar.Severity = InfoBarSeverity.Warning;
+            ResultBar.Title = "无法检查更新";
+            ResultBar.Message = catalog.Warning ?? "没有获取到可用的 7-Zip 版本列表。";
+            ResultBar.IsOpen = true;
+            return;
+        }
+
+        var currentVersion = SevenZipVersion.TryParse(install.Version);
+        var latestVersion = SevenZipVersion.TryParse(latest.Version);
+
+        if (currentVersion is not null && latestVersion is not null && currentVersion >= latestVersion)
+        {
+            await ShowMessageAsync("已是最新版本",
+                $"当前安装：7-Zip {install.Version}\n在线最新：7-Zip {latest.Version}\n\n安装位置：{install.Directory}");
+
+            ResultBar.Severity = InfoBarSeverity.Success;
+            ResultBar.Title = "已是最新版本";
+            ResultBar.Message = $"7-Zip {install.Version}，在线最新为 {latest.Version}。";
+            ResultBar.IsOpen = true;
+            return;
+        }
+
+        Log.Write($"发现 7-Zip 新版本：{install.Version} → {latest.Version}");
+
+        var dialog = new InstallSevenZipDialog
+        {
+            XamlRoot = XamlRoot,
+            PresetRelease = latest,
+            UpdateTargetDirectory = install.Directory,
+        };
+        await dialog.ShowAsync();
+
+        if (string.IsNullOrEmpty(dialog.InstalledPath))
+        {
+            // 用户取消或安装失败
+            return;
+        }
+
+        var refreshed = SevenZipLocator.Validate(dialog.InstalledPath) ?? install;
+        PathBox.Text = refreshed.Directory;
+        UpdatePathStatus();
+        UpdateDirtyState();
+        _ = RefreshIntegrationStatusAsync();
+
+        ResultBar.Severity = InfoBarSeverity.Success;
+        ResultBar.Title = "7-Zip 已更新";
+        ResultBar.Message = string.IsNullOrEmpty(refreshed.Version)
+            ? $"已更新到在线最新版本 {latest.Version}（{refreshed.Directory}）。"
+            : $"当前版本 {refreshed.Version}（{refreshed.Directory}）。";
         ResultBar.IsOpen = true;
     }
 
@@ -492,6 +586,8 @@ public sealed partial class SettingsPage : Page
         PathBox.IsEnabled = !busy;
         ModernMenuCheck.IsEnabled = !busy;
         LegacyMenuCheck.IsEnabled = !busy;
+        InstallSevenZipButton.IsEnabled = !busy;
+        UpdateSevenZipButton.IsEnabled = !busy;
         UpdateDirtyState();
     }
 

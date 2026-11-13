@@ -79,14 +79,24 @@
                                 Click="AutoDetectButton_Click"
                                 Content="自动查找" />
 
-                            <!-- 没检测到 7-Zip 时才出现 -->
-                            <Button
-                                x:Name="InstallSevenZipButton"
+                            <!-- 没检测到 7-Zip 时显示「安装」，检测到时显示「更新」 -->
+                            <StackPanel
                                 Grid.Column="3"
-                                Click="InstallSevenZipButton_Click"
-                                Content="安装 7-Zip"
-                                Style="{StaticResource AccentButtonStyle}"
-                                Visibility="Collapsed" />
+                                Orientation="Horizontal"
+                                Spacing="8">
+                                <Button
+                                    x:Name="InstallSevenZipButton"
+                                    Click="InstallSevenZipButton_Click"
+                                    Content="安装 7-Zip"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Visibility="Collapsed" />
+
+                                <Button
+                                    x:Name="UpdateSevenZipButton"
+                                    Click="UpdateSevenZipButton_Click"
+                                    Content="更新 7-Zip"
+                                    Visibility="Collapsed" />
+                            </StackPanel>
                         </Grid>
 
                         <InfoBar
