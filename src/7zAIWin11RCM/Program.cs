@@ -23,6 +23,11 @@ public static class Program
             return legacyExitCode;
         }
 
+        if (TryHandleModernMenuDiag(args))
+        {
+            return 0;
+        }
+
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Application.Start(callbackParams =>
         {
@@ -90,8 +95,35 @@ public static class Program
         return true;
     }
 
-    private static string? ReadOption(string[] args, string name)
+    /// <summary>
+    /// 诊断新版菜单的安装前提：SevenZipAIWin11RCM.exe --modern-menu diag
+    /// 只做只读检查，不弹 UAC、不改系统。
+    /// </summary>
+    private static bool TryHandleModernMenuDiag(string[] args)
     {
+        if (args.Length < 2
+            || !args[0].Equals("--modern-menu", StringComparison.OrdinalIgnoreCase)
+            || !args[1].Equals("diag", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            foreach (var line in ModernMenuService.Diagnose())
+            {
+                Console.WriteLine(line);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"诊断失败：{ex.Message}");
+        }
+
+        return true;
+    }
+
+    private static string? ReadOption(string[] args, string name)    {
         var index = Array.FindIndex(args, a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }

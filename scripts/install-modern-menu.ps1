@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     安装「7-Zip 右键菜单助手」的 Windows 11 新版右键菜单扩展。

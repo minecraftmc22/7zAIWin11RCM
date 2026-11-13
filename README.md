@@ -76,7 +76,12 @@ SevenZipAIWin11RCM.exe --legacy-menu on --seven-zip "D:\Apps\7-Zip"
 
 # 移除
 SevenZipAIWin11RCM.exe --legacy-menu off
+
+# 诊断新版菜单的安装前提（只读，不弹 UAC）
+SevenZipAIWin11RCM.exe --modern-menu diag
 ```
+
+`--modern-menu diag` 会打印：系统版本、账户是否在管理员组、打包工具是否就位、脚本/清单/DLL 是否存在、脚本语法检查结果，以及一次「不提权试跑」的退出码与日志。装不上新版菜单时先跑它，问题基本能直接定位。
 
 ### 如果本机还没装 7-Zip
 
@@ -222,6 +227,9 @@ Get-AppxPackage -Name 7zAIWin11RCM.ShellExt
 
 **提示安装失败 / 需要 Windows SDK？**
 安装 [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk/)（含 MakeAppx 与 SignTool），或只使用旧版菜单。
+
+**不要用「以管理员身份运行」启动本程序**
+菜单和扩展都是按账户注册的（旧版写 `HKCU`，新版是 MSIX）。以管理员身份运行时，注册会落到管理员账户上，你自己的日常账户反而看不到菜单。正确做法是普通双击启动，等保存时由程序自己弹出授权提示。
 
 **「安装 7-Zip」下载失败或速度很慢？**
 版本列表来自 GitHub，网络受限时可能拉取失败（会自动回退到内置版本列表）。也可以直接从 [7-zip.org](https://www.7-zip.org/download.html) 下载安装包自行安装，然后在设置页用「浏览…」指定目录即可，功能不受影响。
