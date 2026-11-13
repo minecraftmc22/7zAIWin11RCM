@@ -1,0 +1,93 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_DIR: src/7zAIWin11RCM
+  OUTPUT_DIR: src/7zAIWin11RCM/bin/Release/net8.0-windows10.0.19041.0/win-x64
+
+jobs:
+  build:
+    name: 构建 win-x64
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: 还原依赖
+        shell: pwsh
+        run: |
+          dotnet restore src/SevenZipAIWin11RCM.ShellExt/SevenZipAIWin11RCM.ShellExt.csproj -r win-x64
+          dotnet restore $env:PROJECT_DIR/7zAIWin11RCM.csproj -r win-x64
+
+      - name: 解析版本号
+        id: version
+        shell: pwsh
+        run: |
+          $version = '1.0.0'
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "构建版本：$version"
+
+      - name: 构建
+        shell: pwsh
+        run: ./build.ps1 -Configuration Release -Runtime win-x64 -AppVersion ${{ steps.version.outputs.value }}
+
+      - name: 打包产物
+        id: package
+        shell: pwsh
+        run: |
+          $zipName = "7zAIWin11RCM-${{ steps.version.outputs.value }}-win-x64.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName -Force }
+          Compress-Archive -Path "$env:OUTPUT_DIR/*" -DestinationPath $zipName -CompressionLevel Optimal
+          $size = [math]::Round((Get-Item $zipName).Length / 1MB, 1)
+          "name=$zipName" >> $env:GITHUB_OUTPUT
+          Write-Host "已生成 $zipName（$size MB）"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 7zAIWin11RCM-win-x64
+          path: ${{ steps.package.outputs.name }}
+          retention-days: 14
+
+      - name: 发布到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 7-Zip 右键菜单助手 v${{ steps.version.outputs.value }}
+          files: ${{ steps.package.outputs.name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ## 下载
+
+            - `${{ steps.package.outputs.name }}`：Windows x64 免安装版，解压后运行 `SevenZipAIWin11RCM.exe`（需要 .NET 8 运行时）。
+
+            ## 说明
+
+            - 旧版右键菜单：勾选后点「保存」即可，无需管理员权限。
+            - 新版右键菜单：首次开启会请求管理员权限安装扩展包，需要系统装有 Windows SDK 的 `MakeAppx` / `signtool`。
+            - 完整说明见仓库 [README](https://github.com/Minecraftmc22/7zAIWin11RCM#readme)。

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="SevenZipAIWin11RCM.Dialogs.InstallSevenZipDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="安装 7-Zip"
+    CloseButtonText="取消"
+    DefaultButton="Primary"
+    PrimaryButtonText="下一步">
+
+    <Grid Width="460">
+        <!-- 第 1 步：选择版本 -->
+        <StackPanel x:Name="VersionStep" Spacing="12">
+            <TextBlock
+                Text="选择要安装的 7-Zip 版本，默认是最新版本。"
+                Style="{StaticResource DescriptionTextBlockStyle}" />
+
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ComboBox
+                    x:Name="VersionBox"
+                    HorizontalAlignment="Stretch"
+                    DisplayMemberPath="DisplayName"
+                    SelectionChanged="VersionBox_SelectionChanged" />
+
+                <ProgressRing
+                    x:Name="VersionRing"
+                    Grid.Column="1"
+                    Width="20"
+                    Height="20"
+                    VerticalAlignment="Center"
+                    IsActive="False"
+                    Visibility="Collapsed" />
+            </Grid>
+
+            <TextBlock
+                x:Name="VersionHintText"
+                Style="{StaticResource DescriptionTextBlockStyle}"
+                Text="" />
+
+            <InfoBar
+                x:Name="FetchBar"
+                IsClosable="False"
+                IsOpen="False" />
+        </StackPanel>
+
+        <!-- 第 2 步：下载 -->
+        <StackPanel x:Name="DownloadStep" Spacing="12" Visibility="Collapsed">
+            <TextBlock x:Name="DownloadTitle" Text="正在下载安装包…" />
+
+            <ProgressBar
+                x:Name="DownloadBar"
+                Maximum="100"
+                Minimum="0"
+                Value="0" />
+
+            <TextBlock
+                x:Name="DownloadDetail"
+                Style="{StaticResource DescriptionTextBlockStyle}"
+                Text="正在连接…" />
+
+            <TextBlock
+                x:Name="DownloadNameText"
+                Style="{StaticResource DescriptionTextBlockStyle}"
+                TextTrimming="CharacterEllipsis" />
+
+            <InfoBar
+                x:Name="DownloadErrorBar"
+                IsClosable="False"
+                IsOpen="False" />
+        </StackPanel>
+
+        <!-- 第 3 步：选择安装目录 -->
+        <StackPanel x:Name="DirectoryStep" Spacing="12" Visibility="Collapsed">
+            <TextBlock Text="安装目录" Style="{StaticResource BodyStrongTextBlockStyle}" />
+            <TextBlock
+                Text="会在所选目录下自动创建 7-Zip 子文件夹；若已直接选中 7-Zip 目录则原样使用。"
+                Style="{StaticResource DescriptionTextBlockStyle}" />
+
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBox
+                    x:Name="TargetBox"
+                    IsReadOnly="True"
+                    IsSpellCheckEnabled="False" />
+
+                <Button
+                    Grid.Column="1"
+                    Click="BrowseButton_Click"
+                    Content="浏览…" />
+            </Grid>
+
+            <TextBlock
+                x:Name="InstallHintText"
+                Style="{StaticResource DescriptionTextBlockStyle}"
+                Text="安装过程会请求管理员权限。" />
+
+            <InfoBar
+                x:Name="InstallBar"
+                IsClosable="False"
+                IsOpen="False" />
+        </StackPanel>
+
+        <!-- 第 4 步：安装中 / 完成 -->
+        <StackPanel x:Name="FinishStep" Spacing="12" Visibility="Collapsed">
+            <StackPanel x:Name="InstallingPanel" Orientation="Horizontal" Spacing="12">
+                <ProgressRing
+                    Width="20"
+                    Height="20"
+                    IsActive="True" />
+                <TextBlock VerticalAlignment="Center" Text="正在安装，请在弹出的 UAC 提示中选择「是」…" />
+            </StackPanel>
+
+            <InfoBar
+                x:Name="FinishBar"
+                IsClosable="False"
+                IsOpen="False" />
+        </StackPanel>
+    </Grid>
+</ContentDialog>

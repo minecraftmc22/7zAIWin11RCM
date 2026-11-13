@@ -60,6 +60,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <TextBox
@@ -77,6 +78,15 @@
                                 Grid.Column="2"
                                 Click="AutoDetectButton_Click"
                                 Content="自动查找" />
+
+                            <!-- 没检测到 7-Zip 时才出现 -->
+                            <Button
+                                x:Name="InstallSevenZipButton"
+                                Grid.Column="3"
+                                Click="InstallSevenZipButton_Click"
+                                Content="安装 7-Zip"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Visibility="Collapsed" />
                         </Grid>
 
                         <InfoBar

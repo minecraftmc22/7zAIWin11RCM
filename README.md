@@ -1,5 +1,7 @@
 # 7-Zip 右键菜单助手（7zAIWin11RCM）
 
+[![build](https://github.com/Minecraftmc22/7zAIWin11RCM/actions/workflows/build.yml/badge.svg)](https://github.com/Minecraftmc22/7zAIWin11RCM/actions/workflows/build.yml)
+
 把 7-Zip 的解压 / 压缩命令重新放回 **Windows 11 的右键菜单** —— 既支持新版（紧凑）菜单，也支持旧版（经典）菜单，一个开关搞定。
 
 ![设置页](docs/screenshot-settings.png)
@@ -13,6 +15,7 @@
 | 功能 | 说明 |
 | --- | --- |
 | 自动查找 7-Zip | 依次查注册表（`HKLM\SOFTWARE\7-Zip` 的 `Path64` / `Path`）、Program Files、PATH、便携版目录 |
+| 一键安装 7-Zip | 没装 7-Zip 时出现「安装 7-Zip」按钮：选版本（默认最新）→ 带进度下载 → 选目录 → 静默安装 |
 | 手动指定 | 「浏览…」选择安装目录；也接受直接填入 `7zG.exe` 的路径 |
 | 新版右键菜单 | 在 Windows 11 紧凑菜单里直接出现 7-Zip 条目（稀疏 MSIX + COM 扩展） |
 | 旧版右键菜单 | 写入经典菜单（`显示更多选项` 或 `Shift + 右键`），**默认开启** |
@@ -61,6 +64,18 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 - 添加到压缩包（生成 `名称.7z`）
 - 用 7-Zip 打开
 
+### 如果本机还没装 7-Zip
+
+程序检测不到 7-Zip 时，路径输入框右侧会多出一个「安装 7-Zip」按钮，点它走三步向导：
+
+![安装 7-Zip](docs/screenshot-install.png)
+
+1. **选择版本**：版本列表来自 7-Zip 官方 GitHub Release（`ip7z/7zip`），默认选中最新版，并显示架构与安装包大小；断网时回退到内置版本列表。
+2. **下载**：实时显示进度、已下载 / 总大小与速度，可随时取消。
+3. **选择安装位置**：默认 `C:\Program Files`，可直接浏览选择。程序会在所选目录后自动追加 `7-Zip` 子目录（若你直接选中了 `7-Zip` / `7zip` 目录则不再重复追加），因此默认安装路径就是 `C:\Program Files\7-Zip`。点「开始安装」后静默执行官方安装包（`/S /D=`，会请求管理员权限）。
+
+安装完成后路径会自动填回设置页，点「保存」即可连同菜单选项一起生效。
+
 ## 两种菜单有什么区别
 
 | | 旧版（经典）菜单 | 新版（紧凑）菜单 |
@@ -105,15 +120,19 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 ```
 .
 ├─ 7zAIWin11RCM.sln
-├─ build.ps1                     一键构建（先扩展、后主程序）
+├─ build.ps1                     一键构建（先扩展、后主程序，可传 -AppVersion）
+├─ .github\workflows\build.yml   GitHub Actions：构建 + 打包 + tag 自动发版
 ├─ src
 │  ├─ 7zAIWin11RCM               WinUI 3 主程序
-│  │  ├─ Program.cs              自定义入口（右侧菜单动词走无窗口快速路径）
+│  │  ├─ Program.cs              自定义入口（右键菜单动词走无窗口快速路径）
 │  │  ├─ MainWindow.xaml         导航外壳（Mica / 自定义标题栏）
-│  │  ├─ Views\SettingsPage      设置页（路径 / 两个勾选框 / 保存·恢复默认·取消保存）
+│  │  ├─ Views\SettingsPage      设置页（路径 / 安装按钮 / 两个勾选框 / 底部操作栏）
 │  │  ├─ Views\AboutPage         关于页（作者 / 仓库 / 运行环境）
+│  │  ├─ Dialogs\InstallSevenZipDialog  安装 7-Zip 三步向导
 │  │  └─ Services
 │  │     ├─ SevenZipLocator.cs   7-Zip 自动查找与校验
+│  │     ├─ SevenZipReleaseCatalog.cs  从 GitHub Release 拉取版本列表
+│  │     ├─ SevenZipInstaller.cs 下载安装包（带进度）与静默安装
 │  │     ├─ LegacyMenuService.cs 旧版菜单注册表读写
 │  │     ├─ ModernMenuService.cs 新版菜单扩展安装/卸载（调用 PowerShell）
 │  │     ├─ ShellVerbHandler.cs  右键菜单实际执行的命令（解压 / 压缩 / 打开）
@@ -133,6 +152,25 @@ src\7zAIWin11RCM\bin\Release\net8.0-windows10.0.19041.0\win-x64\SevenZipAIWin11R
 
 路径计算、目标目录、压缩包命名都在 C# 里完成，避免注册表里 `%1` 拼接的坑；这类调用不会初始化 XAML，秒开秒退。
 
+## 自动构建与发布（GitHub Actions）
+
+`.github/workflows/build.yml` 会在 GitHub 托管的 Windows 运行器上构建、打包并按需发版：
+
+| 触发条件 | 行为 |
+| --- | --- |
+| push 到 `main` / Pull Request | 构建 `win-x64`，上传 zip 构建产物（保留 14 天） |
+| push 标签 `v*` | 同上，并自动创建 GitHub Release，附上 `7zAIWin11RCM-<版本>-win-x64.zip` |
+| 手动 `workflow_dispatch` | 仅构建并上传产物 |
+
+发版只需要打一个 tag：
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+tag 去掉前缀 `v` 后就是版本号，会写入 exe 的文件版本、关于页显示的版本以及 Release 标题。本地等价命令：`.\build.ps1 -AppVersion 1.2.0`。
+
 ## 常见问题
 
 **勾了新版菜单但菜单里没有？**
@@ -144,6 +182,12 @@ Get-AppxPackage -Name 7zAIWin11RCM.ShellExt
 
 **提示安装失败 / 需要 Windows SDK？**
 安装 [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk/)（含 MakeAppx 与 SignTool），或只使用旧版菜单。
+
+**「安装 7-Zip」下载失败或速度很慢？**
+版本列表来自 GitHub，网络受限时可能拉取失败（会自动回退到内置版本列表）。也可以直接从 [7-zip.org](https://www.7-zip.org/download.html) 下载安装包自行安装，然后在设置页用「浏览…」指定目录即可，功能不受影响。
+
+**安装向导为什么要管理员权限？**
+7-Zip 默认安装到 `C:\Program Files\7-Zip` 并写 HKLM 注册表，官方安装包本身要求提权；向导只是调用官方安装包（`/S /D=`），不会额外做别的事。取消 UAC 会退回上一步，不会留下半装状态。
 
 **如何彻底清理？**
 

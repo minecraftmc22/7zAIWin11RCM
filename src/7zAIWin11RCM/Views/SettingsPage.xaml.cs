@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using SevenZipAIWin11RCM.Dialogs;
 using SevenZipAIWin11RCM.Services;
 using Windows.Storage.Pickers;
 
@@ -132,20 +133,28 @@ public sealed partial class SettingsPage : Page
     private void UpdatePathStatus()
     {
         var input = PathBox.Text;
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            SetBadge(BadgeState.Neutral, "未指定", "\uE946");
-            DetectBar.IsOpen = false;
-            return;
-        }
-
         var install = SevenZipLocator.Validate(input);
+
+        // 只有"没找到可用 7-Zip"时才提供安装入口
+        InstallSevenZipButton.Visibility = install is null ? Visibility.Visible : Visibility.Collapsed;
+
         if (install is null)
         {
-            SetBadge(BadgeState.Critical, "路径无效", "\uE711");
-            DetectBar.Severity = InfoBarSeverity.Warning;
-            DetectBar.Title = "没有找到可用的 7-Zip";
-            DetectBar.Message = $"在「{input}」下未找到 7zG.exe 或 7zFM.exe，请重新选择安装目录。";
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                SetBadge(BadgeState.Neutral, "未指定", "\uE946");
+                DetectBar.Severity = InfoBarSeverity.Warning;
+                DetectBar.Title = "未检测到 7-Zip";
+                DetectBar.Message = "可以手动指定安装目录，或点击「安装 7-Zip」下载并安装。";
+            }
+            else
+            {
+                SetBadge(BadgeState.Critical, "路径无效", "\uE711");
+                DetectBar.Severity = InfoBarSeverity.Warning;
+                DetectBar.Title = "没有找到可用的 7-Zip";
+                DetectBar.Message = $"在「{input}」下未找到 7zG.exe 或 7zFM.exe，请重新选择目录，或点击「安装 7-Zip」。";
+            }
+
             DetectBar.IsOpen = true;
             return;
         }
@@ -246,6 +255,33 @@ public sealed partial class SettingsPage : Page
         DetectBar.Title = "自动查找成功";
         DetectBar.Message = $"{detected.Directory} · 来源：{detected.Source}";
         DetectBar.IsOpen = true;
+    }
+
+    private async void InstallSevenZipButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        var dialog = new InstallSevenZipDialog { XamlRoot = XamlRoot };
+        await dialog.ShowAsync();
+
+        if (string.IsNullOrEmpty(dialog.InstalledPath))
+        {
+            return;
+        }
+
+        var install = SevenZipLocator.Validate(dialog.InstalledPath);
+        PathBox.Text = install?.Directory ?? dialog.InstalledPath;
+        UpdatePathStatus();
+        UpdateDirtyState();
+
+        ResultBar.Severity = InfoBarSeverity.Success;
+        ResultBar.Title = "7-Zip 安装完成";
+        ResultBar.Message =
+            $"已安装到 {PathBox.Text}。点击右下角「保存」把该路径与菜单选项一起生效。";
+        ResultBar.IsOpen = true;
     }
 
     // ---------------------------------------------------------------- 保存 / 恢复默认 / 取消
