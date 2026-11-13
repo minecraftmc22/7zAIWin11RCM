@@ -109,7 +109,8 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 | | 旧版（经典）菜单 | 新版（紧凑）菜单 |
 | --- | --- | --- |
 | 出现位置 | `显示更多选项` / `Shift + 右键` | 一级右键菜单 |
-| 实现方式 | `HKCU\Software\Classes\...\shell` 注册表 verb | 稀疏 MSIX 包 + `IExplorerCommand` COM 扩展 |
+| 实现方式 | 自带壳扩展（转调 7-Zip 自己的菜单） | 稀疏 MSIX 包 + `IExplorerCommand` COM 扩展 |
+| 菜单内容 | 与 7-Zip 原生菜单完全一致 | 精简的常用命令 |
 | 需要管理员 | 否 | 是（安装证书 + 注册应用包） |
 | 需要额外组件 | 无 | Windows SDK 的 `MakeAppx.exe` / `signtool.exe` |
 | 生效时间 | 立即 | 需重启「Windows 资源管理器」 |
@@ -120,13 +121,19 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 
 > ⚠️ **标准（非管理员）账户用不了新版菜单**：MSIX 扩展是按账户注册的。用管理员账户密码授权时，包会装到那个管理员账户上，当前账户依然看不到菜单。这种情况请只用旧版菜单 —— 它不需要任何权限，功能也完全够用。
 
-### 旧版菜单的子菜单是怎么做的
+### 旧版菜单怎么做到「和 7-Zip 一模一样」
 
-父项用 `ExtendedSubCommandsKey` 指向 `HKCU\Software\Classes\7zAIWin11RCM.File`（文件夹是 `...Folder`）这个独立键，真正的动作放在该键的 `shell` 子键下。
+7-Zip 的菜单条目（`解压到 "文件夹名\"`、`添加到 "文件夹名.7z"`、`CRC SHA >` …）不是注册表动词，而是它的 shell 扩展 `7-zip.dll` 在右击瞬间按选中对象生成的。所以静态写注册表永远只能写个大概。
 
-实测（Windows 11 Build 26200）**空 `SubCommands` 和显式动词列表都只会渲染出一个空菜单**，只有 `ExtendedSubCommandsKey` 能正常列出子项；因此三种写法里选了后者。
+这里的做法是：注册一个自己的壳扩展 `SevenZipCascadeMenu`（`shell\SevenZipAIWin11RCM.ShellExt.comhost.dll`），它在右击时**激活 7-Zip 自己的菜单处理器**，把 7-Zip 生成的子菜单整个摘过来挂成「7-Zip」子菜单。因此条目、顺序、图标、自动命名 100% 一致，7-Zip 升级也不用改代码。
 
-文件夹空白处的右菜单更特殊：`Directory\Background` 作用域下三种级联写法全部失效，所以那里不做二级菜单，直接挂一条「7-Zip 添加到压缩包」。
+两个配套细节：
+
+- 7-Zip 自己也注册了同名处理器，不处理会出现两个「7-Zip」。启用时在当前用户下把它的默认值覆盖为空串（HKCU 优先于 HKLM），取消时删掉，原生菜单原样回来。
+- 文件夹空白处交给 7-Zip 会返回 0 个条目（它没有背景菜单），那里仍保留单条「7-Zip 添加到压缩包」。
+
+代价：右键时资源管理器要加载一次 .NET 组件，第一次约 200ms；如果 7-Zip 被卸载，这个子菜单会是空的。
+
 
 ## 新版菜单是怎么实现的
 
@@ -173,11 +180,13 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 │  │     ├─ SevenZipReleaseCatalog.cs  从 GitHub Release 拉取版本列表
 │  │     ├─ SevenZipInstaller.cs 下载安装包（带进度）与静默安装
 │  │     ├─ SevenZipVersion.cs   版本号解析与比较（主.次两段）
-│  │     ├─ LegacyMenuService.cs 旧版菜单注册表读写
+│  │     ├─ LegacyMenuService.cs 旧版菜单：注册/屏蔽壳扩展
 │  │     ├─ ModernMenuService.cs 新版菜单扩展安装/卸载（调用 PowerShell）
 │  │     ├─ ShellVerbHandler.cs  右键菜单实际执行的命令（解压 / 压缩 / 打开）
 │  │     └─ SettingsStore.cs     %LOCALAPPDATA% 下的设置与日志
-│  └─ SevenZipAIWin11RCM.ShellExt COM 宿主扩展（IExplorerCommand × 3）
+│  └─ SevenZipAIWin11RCM.ShellExt COM 宿主扩展
+│     ├─ SevenZipCascadeMenu.cs  旧版菜单处理器（转调 7-Zip 自己的菜单）
+│     └─ ExplorerCommands.cs     新版菜单命令（IExplorerCommand × 3）
 ├─ packaging                    稀疏 MSIX 清单与图标
 ├─ scripts                      新版菜单安装 / 卸载脚本
 ├─ tools\make_assets.py         生成图标与 Logo（纯 Python）
@@ -213,8 +222,10 @@ tag 去掉前缀 `v` 后就是版本号，会写入 exe 的文件版本、关于
 
 ## 常见问题
 
-**旧版菜单里 7-Zip 变成了空菜单 / 点开什么都没有？**
-v1.0.0 的子菜单写法在新版 Windows 11 上不再生效（父项在、子项为空）。v1.0.1 起改用 `ExtendedSubCommandsKey`，更新程序后**取消勾选保存一次、再勾选保存一次**（或直接跑 `--legacy-menu off` 再 `--legacy-menu on`）即可清除旧写法。
+**旧版菜单里 7-Zip 是空的 / 只显示几个条目？**
+v1.1.0 起旧版菜单改为壳扩展转调 7-Zip 原生菜单，条目与 7-Zip 保持一致。从旧版升级后请**取消勾选保存一次、再勾选保存一次**（或跑 `--legacy-menu off` 再 `--legacy-menu on`），把旧的注册表动词清掉。
+
+如果仍然为空，通常是这两个原因：7-Zip 已被卸载（子菜单由 7-Zip 生成）；或者程序目录被移动过导致壳扩展路径失效 —— 重新勾选保存一次即可自动修复。
 
 **勾了新版菜单但菜单里没有？**
 先确认当前是不是管理员账户。标准账户即使输入管理员密码授权，扩展也会装到那个管理员账户上，当前账户依旧看不到 —— 这种情况请用旧版菜单。

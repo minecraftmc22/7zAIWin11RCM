@@ -68,7 +68,7 @@ public sealed partial class SettingsPage : Page
         }
 
         var registered = LegacyMenuService.GetRegisteredAppPath();
-        if (string.Equals(registered, AppInfo.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(registered, LegacyMenuService.HandlerDllPath, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }

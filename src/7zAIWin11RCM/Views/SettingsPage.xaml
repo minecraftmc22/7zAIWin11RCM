@@ -158,7 +158,7 @@
                                     <TextBlock
                                         MaxWidth="620"
                                         Style="{StaticResource DescriptionTextBlockStyle}"
-                                        Text="写入经典菜单（「显示更多选项」或 Shift + 右键）。无需管理员权限，兼容 Windows 10 / 11。" />
+                                        Text="在经典菜单（「显示更多选项」或 Shift + 右键）里提供完整的 7-Zip 子菜单：解压、添加到压缩包、测试、CRC 校验等都和 7-Zip 原生菜单一致。无需管理员权限，兼容 Windows 10 / 11。" />
                                 </StackPanel>
                             </CheckBox>
 
