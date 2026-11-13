@@ -169,28 +169,41 @@ public static class ModernMenuService
             info.Verb = "runas";
         }
 
-        using var process = Process.Start(info);
+        Process? process;
+        try
+        {
+            process = Process.Start(info);
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // 用户在 UAC 提示框里点了「否」
+            return (1223, "已取消管理员授权。");
+        }
+
         if (process is null)
         {
-            return (-1, "无法启动 PowerShell。");
+            return (-1, "无法启动脚本宿主进程。");
         }
 
-        if (!process.WaitForExit(timeoutMilliseconds))
+        using (process)
         {
-            try
+            if (!process.WaitForExit(timeoutMilliseconds))
             {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (Exception ex)
-            {
-                Log.Write("终止安装脚本失败", ex);
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex)
+                {
+                    Log.Write("终止安装脚本失败", ex);
+                }
+
+                return (-1, "安装脚本执行超时。");
             }
 
-            return (-1, "安装脚本执行超时。");
+            var log = File.Exists(logPath) ? File.ReadAllText(logPath) : string.Empty;
+            return (process.ExitCode, log);
         }
-
-        var log = File.Exists(logPath) ? File.ReadAllText(logPath) : string.Empty;
-        return (process.ExitCode, log);
     }
 
     private static (int ExitCode, string StandardOutput) RunPowerShell(string command, bool elevated, int timeoutMilliseconds)
