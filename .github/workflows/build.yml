@@ -94,7 +94,7 @@ jobs:
             ## 功能
 
             - **旧版右键菜单**：勾选后点「保存」立即生效，**无需管理员权限**
-            - **新版右键菜单**：首次开启会请求管理员权限安装 COM 扩展，需要系统装有 Windows SDK 的 `MakeAppx` / `signtool`
+            - **新版右键菜单**：首次开启会请求管理员权限安装 COM 扩展；需要 `MakeAppx.exe` 与 `signtool.exe`，程序会自动查找（注册表 / Program Files / PATH），找不到时可在设置页「打包工具」里手动指定路径
             - **安装 / 更新 7-Zip**：没装 7-Zip 时可一键下载安装；已装时可自动检查并升级到最新版
 
             完整说明见仓库 [README](https://github.com/Minecraftmc22/7zAIWin11RCM#readme)。
