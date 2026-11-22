@@ -109,9 +109,9 @@ Win11 的新菜单要求应用是 MSIX 打包的。但完整打包意味着要�
 
 ## 下载
 
-最新版本是 **v1.2.0**。
+最新版本是 **v1.3.0**。
 
-- **直接下载**：[7zAIWin11RCM-1.2.0-win-x64.zip](https://github.com/minecraftmc22/7zAIWin11RCM/releases/download/v1.2.0/7zAIWin11RCM-1.2.0-win-x64.zip)（40.1 MB，免安装）
+- **直接下载**：[7zAIWin11RCM-1.3.0-win-x64.zip](https://github.com/minecraftmc22/7zAIWin11RCM/releases/download/v1.3.0/7zAIWin11RCM-1.3.0-win-x64.zip)（40.1 MB，免安装）
 - **发布页**：[github.com/minecraftmc22/7zAIWin11RCM/releases](https://github.com/minecraftmc22/7zAIWin11RCM/releases)
 - **源码**：[github.com/minecraftmc22/7zAIWin11RCM](https://github.com/minecraftmc22/7zAIWin11RCM)
 
@@ -122,7 +122,7 @@ Win11 的新菜单要求应用是 MSIX 打包的。但完整打包意味着要�
 **几个使用上的提醒**：
 
 1. 旧版菜单勾选后点保存，立即生效，不需要管理员权限。
-2. 新版菜单第一次开启会弹 UAC，而且系统里需要有 Windows SDK 的 `MakeAppx` 和 `signtool`，没有的话脚本会告诉你去哪装。
+2. 新版菜单第一次开启会弹 UAC，而且系统里需要有 Windows SDK 的 `MakeAppx` 和 `signtool`。程序会自动去注册表、`Program Files`、`PATH` 里找；实在找不到，就在设置页展开「打包工具」，把这两个 exe 的路径指过去。
 3. 从旧版本升级上来的话，建议先「取消勾选 → 保存」清一次，再重新勾选保存，把早期版本留在注册表里的旧写法清掉。
 4. 如果更新程序时提示文件被占用，是因为 `explorer.exe` 还加载着壳扩展的 DLL。先在程序里取消勾选保存，再重启资源管理器，然后覆盖文件。
 
