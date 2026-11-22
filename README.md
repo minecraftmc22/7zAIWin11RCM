@@ -112,7 +112,7 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 | 实现方式 | 自带壳扩展（转调 7-Zip 自己的菜单） | 稀疏 MSIX 包 + `IExplorerCommand`（`EnumSubCommands` 级联） |
 | 菜单内容 | 与 7-Zip 原生菜单完全一致 | 与 7-Zip 原生菜单完全一致 |
 | 需要管理员 | 否 | 是（安装证书 + 注册应用包） |
-| 需要额外组件 | 无 | Windows SDK 的 `MakeAppx.exe` / `signtool.exe` |
+| 需要额外组件 | 无 | Windows SDK 的 `MakeAppx.exe` / `signtool.exe`（自动查找，也可手动指定） |
 | 生效时间 | 立即 | 需重启「Windows 资源管理器」 |
 | 适用系统 | Windows 10 / 11 | Windows 11 22000+ |
 | 标准用户账户 | 可用 | 不可用（见下） |
@@ -169,7 +169,24 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 **排错**：点左下角「查看日志」，或查看
 `%LOCALAPPDATA%\7zAIWin11RCM\app.log`；脚本的完整输出也会写在临时目录的 `setup-*.log` 里并在界面提示中回显。
 
-如果系统没有 Windows SDK 打包工具，脚本会直接返回「系统缺少打包工具」，此时只使用旧版菜单即可，功能完全不受影响。
+如果系统没有 Windows SDK 打包工具，脚本会返回「系统缺少打包工具」，此时只使用旧版菜单即可，功能完全不受影响。
+
+### 找不到 MakeAppx / signtool 怎么办
+
+先别急着装整个 SDK。程序会按下面的顺序自己找：
+
+1. 设置页「打包工具（MakeAppx / SignTool）」里手动填的路径；
+2. 注册表 `HKLM\SOFTWARE\Microsoft\Windows Kits\Installed Roots` 记录的 SDK 根目录（`KitsRoot10` / `KitsRoot81`）——SDK 装在非系统盘也能找到；
+3. 环境变量 `WindowsSdkDir`；
+4. `Program Files (x86)\Windows Kits\10\bin`、`Program Files\Windows Kits\10\bin`；
+5. `App Certification Kit` 目录；
+6. `PATH`。
+
+每个根目录下的版本子目录按版本号倒序、`x64` 优先，保证优先用最新的 SDK。
+
+都找不到时，展开设置页的「打包工具（MakeAppx / SignTool）」，点「浏览…」把两个 exe 指过去——**填 exe 本身或它所在的目录都行**，填上层目录（比如只填到 `Windows Kits\10`）程序也会往下找。点「自动查找」可以随时清掉手动指定、回到自动模式。
+
+> 工具通常在 `C:\Program Files (x86)\Windows Kits\10\bin\<版本>\x64\` 下。如果身边某台机器装了 SDK，把这两个 exe 连同同目录的依赖拷过来指定路径也能用。
 
 ## 项目结构
 
@@ -249,8 +266,16 @@ v1.1.0 起旧版菜单改为壳扩展转调 7-Zip 原生菜单，条目与 7-Zip
 Get-AppxPackage -Name 7zAIWin11RCM.ShellExt
 ```
 
-**提示安装失败 / 需要 Windows SDK？**
-安装 [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk/)（含 MakeAppx 与 SignTool），或只使用旧版菜单。
+**提示「系统缺少打包工具」？**
+展开设置页的「打包工具（MakeAppx / SignTool）」，用「浏览…」指定两个 exe 的路径（exe 或目录都行）；或者安装 [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk/)（含 MakeAppx 与 SignTool）；或者只使用旧版菜单。详见 [找不到 MakeAppx / signtool 怎么办](#找不到-makeappx--signtool-怎么办)。
+
+命令行诊断（只读，不改系统）：
+
+```powershell
+SevenZipAIWin11RCM.exe --modern-menu diag
+```
+
+会打印每个工具的最终路径与来源（注册表 / 环境变量 / Program Files / 手动指定），以及脚本是否会正常启动。
 
 **提示「打包或签名失败」？**
 v1.0.4 起日志会带上 MakeAppx / signtool 的原始输出。常见两类：

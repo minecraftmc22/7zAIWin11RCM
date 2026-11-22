@@ -19,6 +19,12 @@
 .PARAMETER ManifestPath
     AppxManifest.xml 路径，默认 <ExternalPath>\packaging\AppxManifest.xml。
 
+.PARAMETER MakeAppxPath
+    MakeAppx.exe 的路径或所在目录。留空则自动查找 Windows SDK。
+
+.PARAMETER SignToolPath
+    signtool.exe 的路径或所在目录。留空则自动查找 Windows SDK。
+
 .PARAMETER LogPath
     日志文件路径，由主程序传入。
 #>
@@ -27,6 +33,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ExternalPath,
     [Parameter(Mandatory = $true)][string]$ShellExtensionPath,
     [string]$ManifestPath,
+    [string]$MakeAppxPath,
+    [string]$SignToolPath,
     [string]$LogPath
 )
 
@@ -44,21 +52,98 @@ function Write-Log {
     }
 }
 
-function Find-SdkTool {
-    param([string]$Name)
+function Resolve-ToolHint {
+    param([string]$Hint, [string]$Name)
+    if (-not $Hint) { return $null }
+    $path = $Hint.Trim().Trim('"')
+    if (-not $path) { return $null }
 
-    $roots = @(
-        (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'),
-        (Join-Path $env:ProgramFiles 'Windows Kits\10\bin')
-    ) | Where-Object { $_ -and (Test-Path $_) }
-
-    foreach ($root in $roots) {
-        $tool = Get-ChildItem -Path $root -Filter $Name -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\x64\\' } |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-        if ($tool) { return $tool.FullName }
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        if ([IO.Path]::GetFileName($path) -ieq $Name) { return (Resolve-Path -LiteralPath $path).Path }
+        return $null
     }
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) { return $null }
+
+    $direct = Join-Path $path $Name
+    if (Test-Path -LiteralPath $direct) { return (Resolve-Path -LiteralPath $direct).Path }
+
+    # 选到了 bin / Windows Kits\10 这类上层目录：先找一层，再退化为递归
+    $shallow = @(Get-ChildItem -LiteralPath $path -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName $Name } |
+        Where-Object { Test-Path -LiteralPath $_ })
+    if ($shallow.Count -gt 0) { return $shallow[0] }
+
+    $deep = @(Get-ChildItem -LiteralPath $path -Filter $Name -Recurse -File -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending)
+    if ($deep.Count -gt 0) { return $deep[0].FullName }
+
+    return $null
+}
+
+# SDK 安装根：注册表 → 环境变量 → Program Files，SDK 装在非系统盘也能找到
+function Get-SdkBinRoots {
+    $roots = New-Object System.Collections.Generic.List[string]
+
+    foreach ($key in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows Kits\Installed Roots')) {
+        foreach ($value in @('KitsRoot10', 'KitsRoot81')) {
+            try {
+                $item = Get-ItemProperty -LiteralPath $key -Name $value -ErrorAction Stop
+                $root = $item.$value
+                if ($root) { $roots.Add((Join-Path $root 'bin')) }
+            } catch { }
+        }
+    }
+
+    foreach ($variable in @('WindowsSdkDir', 'WindowsSDK80Path')) {
+        $root = [Environment]::GetEnvironmentVariable($variable)
+        if ($root) { $roots.Add((Join-Path $root 'bin')) }
+    }
+
+    if (${env:ProgramFiles(x86)}) { $roots.Add((Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin')) }
+    if ($env:ProgramFiles) { $roots.Add((Join-Path $env:ProgramFiles 'Windows Kits\10\bin')) }
+
+    return $roots
+}
+
+function Find-SdkTool {
+    param([string]$Name, [string]$Hint)
+
+    $manual = Resolve-ToolHint -Hint $Hint -Name $Name
+    if ($manual) { return $manual }
+
+    foreach ($root in (Get-SdkBinRoots)) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+
+        $flat = Join-Path $root $Name
+        if (Test-Path -LiteralPath $flat) { return $flat }
+
+        # 版本目录按版本号倒序，x64 优先
+        $candidates = @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+            Sort-Object -Property @{ Expression = {
+                $parsed = $null
+                if ([version]::TryParse($_.Name, [ref]$parsed)) { $parsed } else { [version]'0.0' }
+            } } -Descending |
+            ForEach-Object {
+                foreach ($arch in @('x64', 'x86', 'arm64')) {
+                    $file = Join-Path (Join-Path $_.FullName $arch) $Name
+                    if (Test-Path -LiteralPath $file) { $file }
+                }
+            })
+        if ($candidates.Count -gt 0) { return $candidates[0] }
+    }
+
+    # 最后兜底：App Certification Kit 与 PATH
+    foreach ($base in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+        if (-not $base) { continue }
+        $kit = Join-Path $base 'Windows Kits\10\App Certification Kit'
+        $file = Join-Path $kit $Name
+        if (Test-Path -LiteralPath $file) { return $file }
+    }
+
+    $fromPath = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($fromPath) { return $fromPath.Source }
 
     return $null
 }
@@ -145,10 +230,13 @@ try {
         }
     }
 
-    $makeAppx = Find-SdkTool -Name 'MakeAppx.exe'
-    $signtool = Find-SdkTool -Name 'signtool.exe'
+    $makeAppx = Find-SdkTool -Name 'MakeAppx.exe' -Hint $MakeAppxPath
+    $signtool = Find-SdkTool -Name 'signtool.exe' -Hint $SignToolPath
     if (-not $makeAppx -or -not $signtool) {
-        Write-Log '错误：未找到 MakeAppx.exe / signtool.exe，请安装 Windows SDK（10.0.22621 或更高）。'
+        $missing = @()
+        if (-not $makeAppx) { $missing += 'MakeAppx.exe' }
+        if (-not $signtool) { $missing += 'signtool.exe' }
+        Write-Log ("错误：未找到 {0}。请在程序设置页的「打包工具」里指定路径，或安装 Windows SDK。" -f ($missing -join ' / '))
         exit 2
     }
     Write-Log "使用 MakeAppx：$makeAppx"

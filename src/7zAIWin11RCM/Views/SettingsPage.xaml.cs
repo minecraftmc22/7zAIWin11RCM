@@ -51,9 +51,12 @@ public sealed partial class SettingsPage : Page
         PathBox.Text = _saved.SevenZipPath ?? string.Empty;
         ModernMenuCheck.IsChecked = _saved.EnableModernMenu;
         LegacyMenuCheck.IsChecked = _saved.EnableLegacyMenu;
+        MakeAppxBox.Text = _saved.MakeAppxPath ?? string.Empty;
+        SignToolBox.Text = _saved.SignToolPath ?? string.Empty;
         _suspendTracking = false;
 
         UpdatePathStatus();
+        RefreshSdkToolsStatus(expandWhenMissing: true);
         UpdateDirtyState();
         SelfHealLegacyMenu();
         PromptIfPending();
@@ -109,6 +112,8 @@ public sealed partial class SettingsPage : Page
         SevenZipPath = PathBox.Text?.Trim(),
         EnableModernMenu = ModernMenuCheck.IsChecked == true,
         EnableLegacyMenu = LegacyMenuCheck.IsChecked == true,
+        MakeAppxPath = MakeAppxBox.Text?.Trim(),
+        SignToolPath = SignToolBox.Text?.Trim(),
     };
 
     // ---------------------------------------------------------------- 路径与勾选
@@ -256,6 +261,128 @@ public sealed partial class SettingsPage : Page
         DetectBar.Title = "自动查找成功";
         DetectBar.Message = $"{detected.Directory} · 来源：{detected.Source}";
         DetectBar.IsOpen = true;
+    }
+
+    // ---------------------------------------------------------------- 打包工具（MakeAppx / SignTool）
+
+    private void SdkToolBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suspendTracking || !IsLoaded)
+        {
+            return;
+        }
+
+        RefreshSdkToolsStatus();
+        UpdateDirtyState();
+    }
+
+    private async void BrowseMakeAppxButton_Click(object sender, RoutedEventArgs e) =>
+        await BrowseToolAsync(MakeAppxBox, SdkToolLocator.MakeAppx);
+
+    private async void BrowseSignToolButton_Click(object sender, RoutedEventArgs e) =>
+        await BrowseToolAsync(SignToolBox, SdkToolLocator.SignTool);
+
+    private async Task BrowseToolAsync(TextBox target, string fileName)
+    {
+        try
+        {
+            var picker = new FileOpenPicker
+            {
+                SuggestedStartLocation = PickerLocationId.ComputerFolder,
+            };
+            picker.FileTypeFilter.Add(".exe");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, App.WindowHandle);
+
+            var file = await picker.PickSingleFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            if (!string.Equals(Path.GetFileName(file.Path), fileName, StringComparison.OrdinalIgnoreCase))
+            {
+                await ShowMessageAsync("选错了文件",
+                    $"这里需要的是 {fileName}，你选择的是 {Path.GetFileName(file.Path)}。\n\n" +
+                    "如果记不清它在哪，可以先点「自动查找」。");
+                return;
+            }
+
+            _suspendTracking = true;
+            target.Text = file.Path;
+            _suspendTracking = false;
+
+            RefreshSdkToolsStatus();
+            UpdateDirtyState();
+        }
+        catch (Exception ex)
+        {
+            Log.Write("选择打包工具失败", ex);
+            await ShowMessageAsync("无法打开文件选择器", ex.Message);
+        }
+    }
+
+    /// <summary>「自动查找」= 放弃手动指定，回到全自动模式，并报告真实结果。</summary>
+    private void DetectSdkToolsButton_Click(object sender, RoutedEventArgs e)
+    {
+        SdkToolsExpander.IsExpanded = true;
+
+        var autoMakeAppx = SdkToolLocator.Locate(SdkToolLocator.MakeAppx, null);
+        var autoSignTool = SdkToolLocator.Locate(SdkToolLocator.SignTool, null);
+
+        if (autoMakeAppx.Found && autoSignTool.Found)
+        {
+            _suspendTracking = true;
+            MakeAppxBox.Text = string.Empty;
+            SignToolBox.Text = string.Empty;
+            _suspendTracking = false;
+        }
+
+        RefreshSdkToolsStatus(expandWhenMissing: true);
+        UpdateDirtyState();
+    }
+
+    /// <summary>刷新打包工具状态；返回是否两项都已找到。</summary>
+    private bool RefreshSdkToolsStatus(bool expandWhenMissing = false)
+    {
+        var makeAppx = SdkToolLocator.Locate(SdkToolLocator.MakeAppx, MakeAppxBox.Text);
+        var signTool = SdkToolLocator.Locate(SdkToolLocator.SignTool, SignToolBox.Text);
+        var ready = makeAppx.Found && signTool.Found;
+
+        SdkToolsStatusText.Text = string.Join("\n", makeAppx.Describe(), signTool.Describe());
+        SdkToolsStatusText.Foreground = ResourceBrush(ready
+            ? "SystemFillColorSuccessBrush"
+            : "SystemFillColorCautionBrush");
+
+        if (ready)
+        {
+            SdkToolsBar.IsOpen = false;
+            return true;
+        }
+
+        var missing = new List<string>();
+        if (!makeAppx.Found)
+        {
+            missing.Add(SdkToolLocator.MakeAppx);
+        }
+
+        if (!signTool.Found)
+        {
+            missing.Add(SdkToolLocator.SignTool);
+        }
+
+        SdkToolsBar.Severity = InfoBarSeverity.Warning;
+        SdkToolsBar.Title = $"还没有找到 {string.Join(" 和 ", missing)}";
+        SdkToolsBar.Message =
+            "可以点「浏览…」指定位置（通常在 Windows SDK 的 bin\\<版本>\\x64 目录下），" +
+            "或安装 Windows SDK 后重试：https://developer.microsoft.com/windows/downloads/windows-sdk/";
+        SdkToolsBar.IsOpen = true;
+
+        if (expandWhenMissing)
+        {
+            SdkToolsExpander.IsExpanded = true;
+        }
+
+        return false;
     }
 
     private async void InstallSevenZipButton_Click(object sender, RoutedEventArgs e)
@@ -418,15 +545,33 @@ public sealed partial class SettingsPage : Page
 
             if (current.EnableModernMenu && installedVersion is null)
             {
-                SetBusy(true, "正在安装新版菜单扩展（可能需要管理员授权）…");
-                var result = await ModernMenuService.InstallAsync();
-                summary.Add(result.Message);
-                if (!result.Success)
+                // 打包工具缺失时先别弹 UAC：直接引导到「打包工具」面板，省一次授权
+                var makeAppxPath = SdkToolLocator.Resolve(SdkToolLocator.MakeAppx, current.MakeAppxPath);
+                var signToolPath = SdkToolLocator.Resolve(SdkToolLocator.SignTool, current.SignToolPath);
+
+                if (makeAppxPath is null || signToolPath is null)
                 {
                     failed = true;
-                    // 安装失败时勾选状态回退，避免界面与实际不一致
                     current.EnableModernMenu = false;
-                    failureDetail = result.Detail ?? result.Message;
+                    SdkToolsExpander.IsExpanded = true;
+                    failureDetail =
+                        "新版右键菜单需要 MakeAppx.exe 与 signtool.exe 把扩展打成 MSIX 包并签名，" +
+                        "当前没有找到它们（已在下方展开「打包工具」面板）。\n\n" +
+                        "可以点「浏览…」手动指定这两个程序的路径，或安装 Windows SDK 后重试；" +
+                        "只想用旧版菜单的话，取消勾选「新版右键菜单」即可。";
+                }
+                else
+                {
+                    SetBusy(true, "正在安装新版菜单扩展（可能需要管理员授权）…");
+                    var result = await ModernMenuService.InstallAsync(current);
+                    summary.Add(result.Message);
+                    if (!result.Success)
+                    {
+                        failed = true;
+                        // 安装失败时勾选状态回退，避免界面与实际不一致
+                        current.EnableModernMenu = false;
+                        failureDetail = result.Detail ?? result.Message;
+                    }
                 }
             }
             else if (!current.EnableModernMenu && installedVersion is not null)
@@ -461,9 +606,12 @@ public sealed partial class SettingsPage : Page
             PathBox.Text = current.SevenZipPath;
             ModernMenuCheck.IsChecked = current.EnableModernMenu;
             LegacyMenuCheck.IsChecked = current.EnableLegacyMenu;
+            MakeAppxBox.Text = current.MakeAppxPath ?? string.Empty;
+            SignToolBox.Text = current.SignToolPath ?? string.Empty;
             _suspendTracking = false;
 
             UpdatePathStatus();
+            RefreshSdkToolsStatus();
             await RefreshIntegrationStatusAsync();
 
             ResultBar.Severity = failed ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
@@ -495,14 +643,17 @@ public sealed partial class SettingsPage : Page
         PathBox.Text = detected?.Directory ?? string.Empty;
         ModernMenuCheck.IsChecked = false;   // 默认关闭新版菜单
         LegacyMenuCheck.IsChecked = true;    // 默认开启旧版菜单
+        MakeAppxBox.Text = string.Empty;     // 打包工具回到自动查找
+        SignToolBox.Text = string.Empty;
         _suspendTracking = false;
 
         UpdatePathStatus();
+        RefreshSdkToolsStatus();
         UpdateDirtyState();
 
         ResultBar.Severity = InfoBarSeverity.Informational;
         ResultBar.Title = "已恢复默认值";
-        ResultBar.Message = "旧版菜单开启、新版菜单关闭、路径使用自动查找结果。点击「保存」后生效。";
+        ResultBar.Message = "旧版菜单开启、新版菜单关闭、路径与打包工具都使用自动查找结果。点击「保存」后生效。";
         ResultBar.IsOpen = true;
     }
 
@@ -582,9 +733,11 @@ public sealed partial class SettingsPage : Page
 
         var parts = new List<string> { "在 Windows 11 紧凑菜单中直接显示 7-Zip 条目。" };
 
-        if (!ModernMenuService.HasPackagingTools)
+        var makeAppx = SdkToolLocator.Locate(SdkToolLocator.MakeAppx, MakeAppxBox.Text);
+        var signTool = SdkToolLocator.Locate(SdkToolLocator.SignTool, SignToolBox.Text);
+        if (!makeAppx.Found || !signTool.Found)
         {
-            parts.Add("启用前需要先安装 Windows SDK（提供 MakeAppx / SignTool）。");
+            parts.Add("启用前还需要 MakeAppx 与 signtool（Windows SDK 自带），可在下方「打包工具」里手动指定。");
         }
 
         parts.Add(ModernMenuService.IsUserAdministrator
@@ -614,6 +767,10 @@ public sealed partial class SettingsPage : Page
         PathBox.IsEnabled = !busy;
         ModernMenuCheck.IsEnabled = !busy;
         LegacyMenuCheck.IsEnabled = !busy;
+        MakeAppxBox.IsEnabled = !busy;
+        SignToolBox.IsEnabled = !busy;
+        DetectSdkButton.IsEnabled = !busy;
+        SdkToolsExpander.IsEnabled = !busy;
         InstallSevenZipButton.IsEnabled = !busy;
         UpdateSevenZipButton.IsEnabled = !busy;
         UpdateDirtyState();

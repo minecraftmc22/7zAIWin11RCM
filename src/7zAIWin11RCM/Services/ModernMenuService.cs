@@ -44,39 +44,12 @@ public static class ModernMenuService
         }
     }
 
-    /// <summary>系统里是否有 MakeAppx.exe 与 signtool.exe（Windows SDK 自带）。</summary>
-    public static bool HasPackagingTools =>
-        FindSdkTool("makeappx.exe") is not null && FindSdkTool("signtool.exe") is not null;
-
-    /// <summary>在 Windows SDK 目录里找打包工具；找不到返回 null。</summary>
-    public static string? FindSdkTool(string fileName)
+    /// <summary>系统里是否有 MakeAppx.exe 与 signtool.exe（Windows SDK 自带，或用户手动指定）。</summary>
+    public static bool HasPackagingTools(AppSettings? settings = null)
     {
-        var kits = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Windows Kits", "10", "bin"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Kits", "10", "bin"),
-        };
-
-        foreach (var bin in kits.Where(Directory.Exists))
-        {
-            // 版本目录按名称倒序，优先用最新的 SDK
-            var versions = Directory.GetDirectories(bin)
-                .OrderByDescending(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
-
-            foreach (var version in versions)
-            {
-                foreach (var arch in new[] { "x64", "x86" })
-                {
-                    var candidate = Path.Combine(version, arch, fileName);
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-            }
-        }
-
-        return null;
+        settings ??= SettingsStore.Load();
+        return SdkToolLocator.Resolve(SdkToolLocator.MakeAppx, settings.MakeAppxPath) is not null
+            && SdkToolLocator.Resolve(SdkToolLocator.SignTool, settings.SignToolPath) is not null;
     }
 
     private static bool GetIsElevated()
@@ -146,14 +119,20 @@ public static class ModernMenuService
     /// </summary>
     public static IReadOnlyList<string> Diagnose()
     {
+        var settings = SettingsStore.Load();
+        var makeAppx = SdkToolLocator.Locate(SdkToolLocator.MakeAppx, settings.MakeAppxPath);
+        var signtool = SdkToolLocator.Locate(SdkToolLocator.SignTool, settings.SignToolPath);
+
         var lines = new List<string>
         {
             $"系统为 Windows 11 22000+：{IsSupported}",
             $"当前账户在管理员组：{IsUserAdministrator}",
             $"当前进程已提权：{IsProcessElevated}",
-            $"打包工具齐全：{HasPackagingTools}",
-            $"  MakeAppx：{FindSdkTool("makeappx.exe") ?? "<未找到>"}",
-            $"  signtool：{FindSdkTool("signtool.exe") ?? "<未找到>"}",
+            $"打包工具齐全：{makeAppx.Found && signtool.Found}",
+            $"  {makeAppx.Describe()}",
+            $"  {signtool.Describe()}",
+            $"  手动指定 MakeAppx：{settings.MakeAppxPath ?? "<未设置>"}",
+            $"  手动指定 signtool：{settings.SignToolPath ?? "<未设置>"}",
             $"应用目录：{AppInfo.AppDirectory}",
             $"安装脚本：{InstallScript}（存在：{File.Exists(InstallScript)}）",
             $"卸载脚本：{UninstallScript}（存在：{File.Exists(UninstallScript)}）",
@@ -212,11 +191,12 @@ public static class ModernMenuService
         }
     }
 
-    public static Task<ModernMenuResult> InstallAsync() => Task.Run(Install);
+    public static Task<ModernMenuResult> InstallAsync(AppSettings? settings = null) =>
+        Task.Run(() => Install(settings ?? SettingsStore.Load()));
 
     public static Task<ModernMenuResult> UninstallAsync() => Task.Run(Uninstall);
 
-    private static ModernMenuResult Install()
+    private static ModernMenuResult Install(AppSettings settings)
     {
         if (!IsSupported)
         {
@@ -238,21 +218,39 @@ public static class ModernMenuService
         }
 
         // 打包工具是硬性前提：缺了就别白弹一次 UAC
-        if (!HasPackagingTools)
+        var makeAppx = SdkToolLocator.Resolve(SdkToolLocator.MakeAppx, settings.MakeAppxPath);
+        var signtool = SdkToolLocator.Resolve(SdkToolLocator.SignTool, settings.SignToolPath);
+        if (makeAppx is null || signtool is null)
         {
+            var missing = new List<string>();
+            if (makeAppx is null)
+            {
+                missing.Add(SdkToolLocator.MakeAppx);
+            }
+
+            if (signtool is null)
+            {
+                missing.Add(SdkToolLocator.SignTool);
+            }
+
             return new ModernMenuResult(false,
                 "系统缺少打包工具，无法安装新版菜单。",
-                "新版右键菜单需要把扩展打成 MSIX 包并签名，这要用到 Windows SDK 里的 " +
-                "MakeAppx.exe 与 signtool.exe，当前系统没有找到它们。\n\n" +
+                $"新版右键菜单需要把扩展打成 MSIX 包并签名，这要用到 MakeAppx.exe 与 signtool.exe。" +
+                $"自动查找没有找到：{string.Join("、", missing)}。\n\n" +
                 "解决办法（任选其一）：\n" +
-                "1. 安装 Windows SDK：https://developer.microsoft.com/windows/downloads/windows-sdk/\n" +
-                "2. 只使用旧版右键菜单 —— 不需要任何额外组件，也不需要管理员权限。");
+                "1. 在设置页展开「打包工具（MakeAppx / SignTool）」，把这两个程序的路径指过去，再点保存；\n" +
+                "2. 安装 Windows SDK 后重试：https://developer.microsoft.com/windows/downloads/windows-sdk/\n" +
+                "3. 只使用旧版右键菜单 —— 不需要任何额外组件，也不需要管理员权限。\n\n" +
+                "提示：工具通常在 C:\\Program Files (x86)\\Windows Kits\\10\\bin\\<版本>\\x64\\ 下；" +
+                "如果 SDK 装在别的盘，也可以在设置里直接指定目录。");
         }
 
         var parameters = new Dictionary<string, string>
         {
             ["ExternalPath"] = AppInfo.AppDirectory.TrimEnd('\\'),
             ["ShellExtensionPath"] = shellDirectory.TrimEnd('\\'),
+            ["MakeAppxPath"] = makeAppx,
+            ["SignToolPath"] = signtool,
         };
 
         var (exitCode, log) = RunScript(InstallScript, parameters, elevated: true, timeoutMilliseconds: 240000);
@@ -324,7 +322,9 @@ public static class ModernMenuService
         return exitCode switch
         {
             1223 => "已取消管理员授权，新版菜单未安装。",
-            2 => "系统缺少打包工具（MakeAppx / SignTool），请安装 Windows SDK 后重试。",
+            2 => string.IsNullOrWhiteSpace(tail)
+                ? "系统缺少打包工具（MakeAppx / SignTool），请在设置页指定它们的路径，或安装 Windows SDK 后重试。"
+                : $"系统缺少打包工具（MakeAppx / SignTool）：{tail}。请在设置页指定路径，或安装 Windows SDK 后重试。",
             3 => string.IsNullOrWhiteSpace(tail)
                 ? "打包或签名失败，请查看详细信息。"
                 : $"打包或签名失败：{tail}",

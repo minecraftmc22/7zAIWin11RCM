@@ -141,14 +141,92 @@
                                 Text="—" />
                         </Grid>
 
-                        <Grid>
+                <!-- 打包工具（仅在配置新版菜单时需要） -->
+                <Expander
+                    x:Name="SdkToolsExpander"
+                    HorizontalAlignment="Stretch"
+                    Header="打包工具（MakeAppx / SignTool）">
+                    <StackPanel Margin="0,4,0,0" Spacing="12">
+                        <TextBlock
+                            Style="{StaticResource DescriptionTextBlockStyle}"
+                            TextWrapping="Wrap"
+                            Text="新版右键菜单需要把扩展打成 MSIX 包并签名。程序会自动在 Windows SDK 目录里查找 MakeAppx.exe 与 signtool.exe；如果 SDK 装在非常规位置（或根本没装），可以在这里直接指定。" />
+
+                        <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <CheckBox
-                                x:Name="LegacyMenuCheck"
+                            <TextBox
+                                x:Name="MakeAppxBox"
+                                Header="MakeAppx.exe"
+                                IsSpellCheckEnabled="False"
+                                PlaceholderText="留空自动查找"
+                                TextChanged="SdkToolBox_TextChanged" />
+
+                            <Button
+                                Grid.Column="1"
+                                VerticalAlignment="Bottom"
+                                Click="BrowseMakeAppxButton_Click"
+                                Content="浏览…" />
+                        </Grid>
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox
+                                x:Name="SignToolBox"
+                                Header="signtool.exe"
+                                IsSpellCheckEnabled="False"
+                                PlaceholderText="留空自动查找"
+                                TextChanged="SdkToolBox_TextChanged" />
+
+                            <Button
+                                Grid.Column="1"
+                                VerticalAlignment="Bottom"
+                                Click="BrowseSignToolButton_Click"
+                                Content="浏览…" />
+                        </Grid>
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Button
+                                x:Name="DetectSdkButton"
+                                Click="DetectSdkToolsButton_Click"
+                                Content="自动查找" />
+
+                            <TextBlock
+                                x:Name="SdkToolsStatusText"
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                TextWrapping="Wrap"
+                                Text="—" />
+                        </Grid>
+
+                        <InfoBar
+                            x:Name="SdkToolsBar"
+                            IsClosable="False"
+                            IsOpen="False" />
+                    </StackPanel>
+                </Expander>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox
+                        x:Name="LegacyMenuCheck"
                                 VerticalAlignment="Top"
                                 IsChecked="True"
                                 Checked="MenuOption_Changed"
