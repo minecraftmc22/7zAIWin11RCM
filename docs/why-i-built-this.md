@@ -109,9 +109,9 @@ Win11 的新菜单要求应用是 MSIX 打包的。但完整打包意味着要�
 
 ## 下载
 
-最新版本是 **v1.3.0**。
+最新版本是 **v1.3.1**。
 
-- **直接下载**：[7zAIWin11RCM-1.3.0-win-x64.zip](https://github.com/minecraftmc22/7zAIWin11RCM/releases/download/v1.3.0/7zAIWin11RCM-1.3.0-win-x64.zip)（40.1 MB，免安装）
+- **直接下载**：[7zAIWin11RCM-1.3.1-win-x64.zip](https://github.com/minecraftmc22/7zAIWin11RCM/releases/download/v1.3.1/7zAIWin11RCM-1.3.1-win-x64.zip)（40.1 MB，免安装）
 - **发布页**：[github.com/minecraftmc22/7zAIWin11RCM/releases](https://github.com/minecraftmc22/7zAIWin11RCM/releases)
 - **源码**：[github.com/minecraftmc22/7zAIWin11RCM](https://github.com/minecraftmc22/7zAIWin11RCM)
 
