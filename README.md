@@ -157,7 +157,7 @@ SevenZipAIWin11RCM.exe --modern-menu diag
 
 - `EnumSubCommands` 拿不到 `IShellItemArray`，所以选中项在 `GetTitle` / `GetState` 阶段缓存；没有可用条目时 `GetState` 返回 `ECS_HIDDEN`，不会留下一个空菜单。
 - 取 `IDataObject` 必须用父文件夹的 `IShellFolder::GetUIObjectOf` + **子 PIDL**；`SHCreateDataObject` 传绝对 PIDL 会返回 `E_INVALIDARG`。
-- 执行时构造 `CMINVOKECOMMANDINFO`（x64 下 56 字节），`lpVerb` 直接放命令 id（MAKEINTRESOURCE）。
+- 执行时构造 `CMINVOKECOMMANDINFO`（x64 下 56 字节）。`lpVerb` 低位要放**命令索引 `wID - idCmdFirst`**，不能直接放菜单项的 `wID`：7-Zip 的 `InvokeCommand` 把它当作 0 基索引，传 `wID` 会让每条命令整体偏移一位（点「解压到 "xxx\"」实际执行的是下一条「测试压缩包」）。这里调用 `QueryContextMenu` 时固定 `idCmdFirst = 1`，转发时减掉 1 即可。
 
 勾选「新版右键菜单」并保存时，主程序以管理员权限调用 `install-modern-menu.ps1`：
 

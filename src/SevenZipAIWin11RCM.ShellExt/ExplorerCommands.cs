@@ -87,6 +87,12 @@ internal static class SevenZipMenuBridge
 
     private const int MfByPosition = 0x00000400;
 
+    /// <summary>
+    /// 调用 7-Zip 的 QueryContextMenu 时使用的 idCmdFirst。
+    /// 菜单项 wID = MenuIdFirst + 命令索引，所以反算索引要减掉它。
+    /// </summary>
+    private const int MenuIdFirst = 1;
+
     /// <summary>读取指定选中对象对应的菜单项。</summary>
     public static List<MenuNode> ReadMenu(IReadOnlyList<string> paths)
     {
@@ -108,9 +114,19 @@ internal static class SevenZipMenuBridge
         return ReadItems(nested != IntPtr.Zero ? nested : menu);
     }
 
-    /// <summary>执行菜单项：重建同样的菜单，然后按命令 id 转交给 7-Zip。</summary>
+    /// <summary>执行菜单项：重建同样的菜单，然后按命令索引转交给 7-Zip。</summary>
     public static bool Invoke(IReadOnlyList<string> paths, int id)
     {
+        // 7-Zip 的 InvokeCommand 把 lpVerb 低位当成「相对 idCmdFirst 的 0 基索引」，
+        // 而菜单项的 wID 是 MenuIdFirst + 索引。直接回传 wID 会让每条命令整体偏移一位
+        // （点「解压到 xxx"」实际执行的是下一条「测试压缩包」）。
+        var commandIndex = id - MenuIdFirst;
+        if (commandIndex < 0)
+        {
+            Trace.WriteLine($"7zAIWin11RCM: 命令 id {id} 小于 idCmdFirst，忽略");
+            return false;
+        }
+
         using var session = Open(paths);
         if (session?.ContextMenu is null)
         {
@@ -124,7 +140,7 @@ internal static class SevenZipMenuBridge
             cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFO>(),
             fMask = 0,
             hwnd = IntPtr.Zero,
-            lpVerb = (IntPtr)id,
+            lpVerb = (IntPtr)commandIndex,
             lpParameters = IntPtr.Zero,
             lpDirectory = IntPtr.Zero,
             nShow = 1,
@@ -187,7 +203,7 @@ internal static class SevenZipMenuBridge
         return nodes;
     }
 
-    private static MenuSession? Open(IReadOnlyList<string> paths)
+    internal static MenuSession? Open(IReadOnlyList<string> paths)
     {
         if (paths.Count == 0)
         {
@@ -318,7 +334,7 @@ internal static class SevenZipMenuBridge
 
             session.Menu = menu;
             session.ContextMenu = contextMenu;
-            contextMenu.QueryContextMenu(menu, 0, 1, 0x7FFF, 0);
+            contextMenu.QueryContextMenu(menu, 0, MenuIdFirst, 0x7FFF, 0);
 
             return session;
         }
@@ -357,7 +373,7 @@ internal static class SevenZipMenuBridge
         }
     }
 
-    private sealed class MenuSession : IDisposable
+    internal sealed class MenuSession : IDisposable
     {
         public IntPtr FolderPidl { get; set; }
         public IntPtr DataObject { get; set; }
